@@ -21,7 +21,7 @@ def seqExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 process DADA2_FILTER_TRIM {
     tag "${meta.id}"
     label 'process_low'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/filtered", mode: 'copy', pattern: "*_filt_stats.tsv", enabled: !params.store_dir
 
     input:
@@ -34,7 +34,6 @@ process DADA2_FILTER_TRIM {
     script:
     if (params.lang == 'python')
     """
-    PYTHONPATH=${params.dada2_path}:\${PYTHONPATH:-} \
     dada2_filter_trim.py \
         "${meta.id}" "${r1}" "${r2}" \
         ${params.maxEE} ${params.truncQ} ${params.maxN} \
@@ -55,7 +54,7 @@ process DADA2_FILTER_TRIM {
 process DADA2_LEARN_ERRORS {
     tag "${meta.id}"
     label 'process_high'
-    conda dadaEngine() == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda dadaEngine() == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/error_models", mode: 'copy', enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/error_models" : null
 
@@ -69,7 +68,6 @@ process DADA2_LEARN_ERRORS {
     script:
     if (dadaEngine() == 'python')
     """
-    PYTHONPATH=${params.dada2_path}:\${PYTHONPATH:-} \
     dada2_learn_errors.py "${meta.id}" ${task.cpus}
     """
     else
@@ -83,7 +81,7 @@ process DADA2_LEARN_ERRORS {
 process DADA2_DENOISE {
     tag "${meta.id}"
     label 'process_high'
-    conda dadaEngine() == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda dadaEngine() == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/seqtabs", mode: 'copy', enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/seqtabs" : null
 
@@ -97,7 +95,6 @@ process DADA2_DENOISE {
     script:
     if (dadaEngine() == 'python')
     """
-    PYTHONPATH=${params.dada2_path}:\${PYTHONPATH:-} \
     dada2_denoise.py \
         "${meta.id}" "${errF}" "${errR}" \
         ${params.min_overlap} ${task.cpus}

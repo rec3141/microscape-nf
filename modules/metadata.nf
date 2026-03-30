@@ -5,7 +5,7 @@ def metaExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 process LOAD_METADATA {
     tag "metadata"
     label 'process_low'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
 
     input:
     path(seqtab)

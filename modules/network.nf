@@ -6,7 +6,7 @@ def netExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 process NETWORK_SPARCC {
     tag "sparcc"
     label 'process_high'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/network", mode: 'copy'
 
     input:

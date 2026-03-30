@@ -9,7 +9,7 @@ def taxExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 process ASSIGN_TAXONOMY {
     tag "${db_name}"
     label 'process_high'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/taxonomy", mode: 'copy'
     storeDir params.store_dir ? "${params.store_dir}/taxonomy" : null
 
@@ -25,7 +25,6 @@ process ASSIGN_TAXONOMY {
     def levels_arg = tax_levels ? "\"${tax_levels}\"" : "null"
     if (params.lang == 'python')
     """
-    PYTHONPATH=${params.dada2_path}:\${PYTHONPATH:-} \
     assign_taxonomy.py \
         "${seqtab}" "${ref_db}" "${db_name}" \
         ${task.cpus} ${levels_arg}

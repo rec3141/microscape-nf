@@ -10,7 +10,7 @@ def renormExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 process RENORMALIZE {
     tag "renormalize"
     label 'process_medium'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/renormalized", mode: 'copy'
 
     input:

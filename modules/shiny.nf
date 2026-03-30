@@ -6,7 +6,7 @@
 process BUILD_VIZ {
     tag "build_viz"
     label 'process_low'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/viz", mode: 'copy'
 
     input:

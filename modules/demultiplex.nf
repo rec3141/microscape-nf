@@ -7,7 +7,7 @@
 process DEMULTIPLEX {
     tag "${meta.id}"
     label 'process_medium'
-    conda "${projectDir}/conda-envs/microscape-python"
+    conda "${projectDir}/envs/python.yml"
     publishDir "${params.outdir}/demultiplexed", mode: 'copy', enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/demultiplexed" : null
 

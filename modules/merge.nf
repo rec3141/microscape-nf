@@ -12,7 +12,7 @@ def seqExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 process MERGE_SEQTABS {
     tag "merge-all"
     label 'process_medium'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
 
     input:
     path(seqtab_files)
@@ -36,7 +36,7 @@ process MERGE_SEQTABS {
 process REMOVE_CHIMERAS {
     tag "chimera-removal"
     label 'process_high'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
 
     input:
     path(seqtab)
@@ -48,7 +48,6 @@ process REMOVE_CHIMERAS {
     script:
     if (params.lang == 'python')
     """
-    PYTHONPATH=${params.dada2_path}:\${PYTHONPATH:-} \
     remove_chimeras.py "${seqtab}" ${task.cpus}
     """
     else
@@ -61,7 +60,7 @@ process REMOVE_CHIMERAS {
 process FILTER_SEQTAB {
     tag "filter-qc"
     label 'process_medium'
-    conda params.lang == 'python' ? "${projectDir}/conda-envs/microscape-python" : "${projectDir}/conda-envs/microscape-r"
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/seqtab_final", mode: 'copy'
 
     input:
