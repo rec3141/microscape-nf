@@ -1,0 +1,10 @@
+name: microscape-python
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - python >=3.10
+  - papa2
+  - microscape
+  - cutadapt
+  - mafft
