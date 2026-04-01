@@ -42,6 +42,91 @@ export const GROUP_HEX = {
   unknown: '#999999',
 };
 
+// ── Taxonomy coloring ─────────────────────────────────────────────────────
+
+/** 20 perceptually distinct colors for taxonomy (Tableau 20-ish) */
+const TAX_PALETTE = [
+  '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
+  '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac',
+  '#86bcb6', '#d37295', '#fabfd2', '#8cd17d', '#b6992d',
+  '#499894', '#e17c05', '#a0cbe8', '#f1ce63', '#d4a6c8',
+];
+
+/**
+ * Build a color map: taxon name → hex color for the top N taxa at a level.
+ * Returns { colorMap: {name: hex}, ranked: [{name, count, color}] }
+ */
+export function buildTaxColorMap(level, maxColors = 18) {
+  const db = Object.keys(store.taxonomy)[0];
+  if (!db || !store.taxonomy[db]) return { colorMap: {}, ranked: [] };
+
+  const levels = store.taxonomy[db].levels || [];
+  const assignments = store.taxonomy[db].assignments || {};
+  const levelIdx = levels.indexOf(level);
+  if (levelIdx < 0) return { colorMap: {}, ranked: [] };
+
+  // Count ASVs per taxon at this level
+  const counts = {};
+  for (const asvId in assignments) {
+    const val = assignments[asvId]?.[levelIdx];
+    if (val) {
+      counts[val] = (counts[val] || 0) + 1;
+    }
+  }
+
+  // Rank by count, assign colors to top N
+  const ranked = Object.entries(counts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const colorMap = {};
+  for (let i = 0; i < ranked.length; i++) {
+    if (i < maxColors) {
+      ranked[i].color = TAX_PALETTE[i % TAX_PALETTE.length];
+      colorMap[ranked[i].name] = ranked[i].color;
+    } else {
+      ranked[i].color = '#475569';
+      colorMap[ranked[i].name] = '#475569';
+    }
+  }
+
+  return { colorMap, ranked };
+}
+
+/**
+ * Get the hex color for an ASV given a taxonomy level and color map.
+ */
+export function getAsvColor(asvId, level, colorMap) {
+  const db = Object.keys(store.taxonomy)[0];
+  if (!db || !store.taxonomy[db]) return '#475569';
+
+  const levels = store.taxonomy[db].levels || [];
+  const assignments = store.taxonomy[db].assignments || {};
+  const levelIdx = levels.indexOf(level);
+  if (levelIdx < 0) return '#475569';
+
+  const val = assignments[asvId]?.[levelIdx];
+  return val ? (colorMap[val] || '#475569') : '#475569';
+}
+
+/** Convert hex to regl-scatterplot RGBA [0-1] */
+export function hexToRegl(hex) {
+  if (!hex || hex[0] !== '#') return [0.4, 0.4, 0.4, 0.5];
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return [r, g, b, 0.8];
+}
+
+/** Convert hex to phylocanvas RGBA [0-255] */
+export function hexToRgba255(hex) {
+  if (!hex || hex[0] !== '#') return [71, 85, 105, 255];
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return [r, g, b, 255];
+}
+
 // ── Data loading ────────────────────────────────────────────────────────────
 
 async function fetchJson(url) {

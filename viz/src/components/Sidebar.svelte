@@ -1,5 +1,5 @@
 <script>
-  import { store, GROUP_HEX } from '../stores/data.svelte.js';
+  import { store, GROUP_HEX, buildTaxColorMap } from '../stores/data.svelte.js';
   import AutocompleteInput from './AutocompleteInput.svelte';
 
   let { activeTab = 'samples', filters = $bindable({}) } = $props();
@@ -61,16 +61,46 @@
           candidates={taxCandidates}
         />
 
-        <fieldset class="space-y-1">
-          <legend class="text-xs text-slate-400">Groups</legend>
-          {#each Object.keys(filters.groupFlags || {}) as group}
-            <label class="flex items-center gap-2 text-sm capitalize">
-              <input type="checkbox" bind:checked={filters.groupFlags[group]} class="accent-blue-500" />
-              <span class="inline-block h-2.5 w-2.5 rounded-full" style="background:{GROUP_HEX[group]}"></span>
-              {group}
-            </label>
-          {/each}
-        </fieldset>
+        <label class="block">
+          <span class="text-xs text-slate-400">Color by</span>
+          <select bind:value={filters.colorByLevel} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
+            <option value="group">Group (broad)</option>
+            {#each taxLevels as level}
+              <option value={level}>{level}</option>
+            {/each}
+          </select>
+        </label>
+
+        {#if filters.colorByLevel === 'group'}
+          <fieldset class="space-y-1">
+            <legend class="text-xs text-slate-400">Groups</legend>
+            {#each Object.keys(filters.groupFlags || {}) as group}
+              <label class="flex items-center gap-2 text-sm capitalize">
+                <input type="checkbox" bind:checked={filters.groupFlags[group]} class="accent-blue-500" />
+                <span class="inline-block h-2.5 w-2.5 rounded-full" style="background:{GROUP_HEX[group]}"></span>
+                {group}
+              </label>
+            {/each}
+          </fieldset>
+        {:else}
+          {@const taxColors = buildTaxColorMap(filters.colorByLevel)}
+          <div class="space-y-0.5 max-h-48 overflow-y-auto">
+            <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
+            {#each taxColors.ranked.slice(0, 20) as item}
+              <button
+                class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
+                onclick={() => filters.taxonFilter = item.name}
+              >
+                <span class="inline-block h-2 w-2 rounded-full shrink-0" style="background:{item.color}"></span>
+                <span class="truncate">{item.name}</span>
+                <span class="ml-auto text-slate-500 shrink-0">{item.count}</span>
+              </button>
+            {/each}
+            {#if taxColors.ranked.length > 20}
+              <p class="text-[10px] text-slate-500 pl-1">+{taxColors.ranked.length - 20} more (gray)</p>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
   </div>

@@ -4,6 +4,7 @@
   import {
     store, countsBySample,
     GROUP_COLORS, GROUP_HEX,
+    buildTaxColorMap, getAsvColor, hexToRegl,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -36,12 +37,18 @@
     catch { return null; }
   });
 
+  let taxColorMap = $derived.by(() => {
+    if (filters.colorByLevel === 'group') return null;
+    return buildTaxColorMap(filters.colorByLevel);
+  });
+
   let overlayPoints = $derived.by(() => {
     if (!filters.showOverlay || filteredSamples.length === 0 || store.asvs.length === 0) return [];
 
     const re = taxonRe();
     const pts = [];
     const gf = filters.groupFlags || {};
+    const cmap = taxColorMap?.colorMap;
 
     for (const sample of filteredSamples) {
       const sIdx = store.samples.indexOf(sample);
@@ -57,7 +64,12 @@
         if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
 
         const proportion = count / totalCount;
-        const color = GROUP_COLORS[group] ?? GROUP_COLORS.prokaryote;
+        let color;
+        if (cmap) {
+          color = hexToRegl(getAsvColor(asv.id, filters.colorByLevel, cmap));
+        } else {
+          color = GROUP_COLORS[group] ?? GROUP_COLORS.prokaryote;
+        }
 
         pts.push({
           x: sample.x + (Math.random() - 0.5) * 0.3,

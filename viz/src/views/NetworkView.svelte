@@ -4,6 +4,7 @@
   import {
     store, countsByAsv,
     GROUP_COLORS, GROUP_HEX,
+    buildTaxColorMap, getAsvColor, hexToRegl,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -93,7 +94,11 @@
     const xArr = filteredAsvs.map(a => a.x ?? 0);
     const yArr = filteredAsvs.map(a => a.y ?? 0);
     const sizes = filteredAsvs.map(a => Math.max(25, Math.log2((a.total_reads ?? 1) + 1) * 12));
-    const colors = filteredAsvs.map(a => GROUP_COLORS[a.group ?? 'prokaryote'] ?? GROUP_COLORS.prokaryote);
+    const cmap = filters.colorByLevel !== 'group' ? buildTaxColorMap(filters.colorByLevel).colorMap : null;
+    const colors = filteredAsvs.map(a => {
+      if (cmap) return hexToRegl(getAsvColor(a.id, filters.colorByLevel, cmap));
+      return GROUP_COLORS[a.group ?? 'prokaryote'] ?? GROUP_COLORS.prokaryote;
+    });
 
     scatterplot.draw({ x: xArr, y: yArr, size: sizes, color: colors }).then(() => {
       if (!hasZoomed) {

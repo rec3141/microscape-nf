@@ -3,6 +3,7 @@
   import {
     store,
     GROUP_COLORS, GROUP_HEX,
+    buildTaxColorMap, getAsvColor, hexToRgba255,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -24,32 +25,7 @@
     return layoutDefs.find(l => l.key === treeType)?.label || treeType;
   }
 
-  // ---- Color-by cycle ----
-  let colorBy = $state('group');
-  const colorDefs = [
-    { key: 'group', label: 'Group' },
-    { key: 'phylum', label: 'Phylum' },
-    { key: 'abundance', label: 'Abundance' },
-  ];
-  function cycleColor() {
-    const keys = colorDefs.map(c => c.key);
-    colorBy = keys[(keys.indexOf(colorBy) + 1) % keys.length];
-  }
-  function colorLabel() {
-    return colorDefs.find(c => c.key === colorBy)?.label || colorBy;
-  }
-
-  const palette = ['#22d3ee', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#fb923c',
-                   '#2dd4bf', '#818cf8', '#f472b6', '#4ade80', '#e879f9', '#38bdf8',
-                   '#94a3b8', '#d4d4d8', '#78716c', '#64748b', '#475569'];
-
-  function hexToRgba(hex) {
-    if (!hex || hex[0] !== '#') return [148, 163, 184, 255];
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return [r, g, b, 255];
-  }
+  // Color-by comes from shared filters.colorByLevel
 
   // ---- Taxonomy data ----
   let primaryDb = $derived(Object.keys(store.taxonomy)[0] || null);
@@ -60,17 +36,6 @@
   let taxLevels = $derived(
     primaryDb && store.taxonomy[primaryDb]?.levels ? store.taxonomy[primaryDb].levels : []
   );
-
-  let uniquePhyla = $derived.by(() => {
-    const phyla = new Set();
-    const phylumIdx = taxLevels.indexOf('Phylum');
-    if (phylumIdx < 0) return [];
-    for (const asvId in taxByAsv) {
-      const p = taxByAsv[asvId]?.[phylumIdx];
-      if (p) phyla.add(p);
-    }
-    return [...phyla].sort();
-  });
 
   // ---- Taxonomy regex for filtering ----
   let taxonRe = $derived(() => {
@@ -94,10 +59,15 @@
     return ids;
   });
 
-  // ---- Node styles ----
+  // ---- Node styles using shared color-by ----
+  let taxColorMap = $derived.by(() => {
+    if (filters.colorByLevel === 'group') return null;
+    return buildTaxColorMap(filters.colorByLevel);
+  });
+
   let nodeStyles = $derived.by(() => {
     const styles = {};
-    const phylumIdx = taxLevels.indexOf('Phylum');
+    const cmap = taxColorMap?.colorMap;
 
     for (const asv of store.asvs) {
       const id = asv.id;
@@ -112,24 +82,15 @@
         continue;
       }
 
-      let color;
-      if (colorBy === 'group') {
-        color = GROUP_HEX[asv.group] || GROUP_HEX.unknown;
-      } else if (colorBy === 'phylum') {
-        const phylum = taxByAsv[id]?.[phylumIdx] || '';
-        const idx = uniquePhyla.indexOf(phylum);
-        color = idx >= 0 ? palette[idx % palette.length] : '#475569';
-      } else if (colorBy === 'abundance') {
-        const reads = asv.total_reads || 0;
-        const maxReads = Math.max(...store.asvs.map(a => a.total_reads || 0), 1);
-        const frac = Math.log2(reads + 1) / Math.log2(maxReads + 1);
-        const r = Math.round(255 * frac);
-        const toHex = (v) => Math.min(255, Math.max(0, v)).toString(16).padStart(2, '0');
-        color = `#${toHex(r)}${toHex(255 - r)}${toHex(100)}`;
+      let hex;
+      if (cmap) {
+        hex = getAsvColor(id, filters.colorByLevel, cmap);
+      } else {
+        hex = GROUP_HEX[asv.group] || GROUP_HEX.unknown;
       }
 
       styles[id] = {
-        fillColour: hexToRgba(color || '#94a3b8'),
+        fillColour: hexToRgba255(hex),
         shape: 'circle',
         nodeSize: 1,
       };
@@ -170,15 +131,6 @@
       onclick={cycleLayout}
     >
       {layoutLabel()} &#x25BE;
-    </button>
-
-    <span class="text-slate-400">Color:</span>
-    <button
-      class="px-3 py-1 rounded-md border border-cyan-400 bg-cyan-400/10 text-cyan-400"
-      style="min-width: 5rem"
-      onclick={cycleColor}
-    >
-      {colorLabel()} &#x25BE;
     </button>
 
     <span class="text-slate-500 ml-auto">{filteredAsvIds.size} / {store.asvs.length} ASVs</span>

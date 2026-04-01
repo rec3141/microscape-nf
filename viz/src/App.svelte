@@ -14,6 +14,7 @@
   let filters = $state({
     // Taxonomy (shared across all views)
     taxonFilter: '',
+    colorByLevel: 'group',
     groupFlags: {
       prokaryote: true,
       eukaryote: true,
