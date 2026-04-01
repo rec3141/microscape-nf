@@ -1,5 +1,6 @@
 <script>
   import { store, GROUP_HEX } from '../stores/data.svelte.js';
+  import AutocompleteInput from './AutocompleteInput.svelte';
 
   let { activeTab = 'samples', filters = $bindable({}) } = $props();
 
@@ -19,6 +20,25 @@
   let taxLevels = $derived(
     store.taxonomy[Object.keys(store.taxonomy)[0]]?.levels || []
   );
+
+  // Autocomplete candidates
+  let taxCandidates = $derived.by(() => {
+    const db = Object.keys(store.taxonomy)[0];
+    if (!db || !store.taxonomy[db]?.assignments) return [];
+    const terms = new Set();
+    const levels = store.taxonomy[db].levels || [];
+    for (const asvId in store.taxonomy[db].assignments) {
+      const vals = store.taxonomy[db].assignments[asvId];
+      for (const v of vals) {
+        if (v) terms.add(v);
+      }
+    }
+    return [...terms].sort();
+  });
+
+  let sampleCandidates = $derived(
+    store.samples.map(s => s.id).filter(Boolean).sort()
+  );
 </script>
 
 <aside class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900/60">
@@ -34,15 +54,12 @@
     </button>
     {#if sections.taxonomy}
       <div class="space-y-3 px-3 pb-3">
-        <label class="block">
-          <span class="text-xs text-slate-400">Filter (regex)</span>
-          <input
-            type="text"
-            bind:value={filters.taxonFilter}
-            placeholder="e.g. Proteobacteria"
-            class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
+        <AutocompleteInput
+          bind:value={filters.taxonFilter}
+          label="Filter (regex)"
+          placeholder="e.g. Proteobacteria"
+          candidates={taxCandidates}
+        />
 
         <fieldset class="space-y-1">
           <legend class="text-xs text-slate-400">Groups</legend>
@@ -72,15 +89,12 @@
             <input type="range" min="0" max="50000" step="100" bind:value={filters.minReads} class="mt-1 w-full accent-blue-500" />
           </label>
 
-          <label class="block">
-            <span class="text-xs text-slate-400">Sample filter (regex)</span>
-            <input
-              type="text"
-              bind:value={filters.sampleFilter}
-              placeholder="e.g. Plate1"
-              class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-          </label>
+          <AutocompleteInput
+            bind:value={filters.sampleFilter}
+            label="Sample filter (regex)"
+            placeholder="e.g. Plate1"
+            candidates={sampleCandidates}
+          />
 
           <label class="flex items-center gap-2 text-sm">
             <input type="checkbox" bind:checked={filters.showOverlay} class="accent-blue-500" />
