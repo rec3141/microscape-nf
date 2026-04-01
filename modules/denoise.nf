@@ -18,6 +18,10 @@ def denoiseEngine() { return params.denoise_engine ?: params.lang }
 def errExt() { return denoiseEngine() == 'python' ? 'pkl' : 'rds' }
 def seqExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 
+// TODO: AUTO_TRIM currently computes a single truncation length across all
+// input files. Different sequencing runs (plates, lanes) can have different
+// quality profiles — this should be extended to compute per-run/per-plate
+// truncation lengths and pass them to FILTER_TRIM grouped by run ID.
 process AUTO_TRIM {
     label 'process_low'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
