@@ -162,21 +162,19 @@
 
   function handleKey(e) {
     if (!plotDiv || !hasPlot) return;
-    if (e.type === 'keydown' && e.key === 'Shift') {
-      Plotly.relayout(plotDiv, { dragmode: 'lasso' });
-    } else if (e.type === 'keyup' && e.key === 'Shift') {
-      Plotly.relayout(plotDiv, { dragmode: 'pan' });
-    } else if (e.type === 'keydown' && e.key === 'Escape') {
+    if (e.key === 'Shift') {
+      Plotly.relayout(plotDiv, { dragmode: e.type === 'keydown' ? 'lasso' : 'pan' });
+    } else if (e.key === 'Escape' && e.type === 'keydown') {
       store.selectedSample = null;
     }
   }
 
   onMount(() => {
-    window.addEventListener('keydown', handleKey);
-    window.addEventListener('keyup', handleKey);
+    document.addEventListener('keydown', handleKey);
+    document.addEventListener('keyup', handleKey);
     return () => {
-      window.removeEventListener('keydown', handleKey);
-      window.removeEventListener('keyup', handleKey);
+      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('keyup', handleKey);
       if (plotDiv && hasPlot) Plotly.purge(plotDiv);
     };
   });
