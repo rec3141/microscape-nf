@@ -89,9 +89,8 @@
             {#if effectiveLevel !== filters.colorByLevel || filters.taxonFilter}
               <div class="flex items-center gap-1 mb-1">
                 <button
-                  class="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold"
+                  class="px-2 py-0.5 text-sm text-cyan-400 hover:text-cyan-300 hover:bg-slate-800 font-bold rounded border border-slate-700"
                   onclick={() => {
-                    // Go up: clear filter and step colorByLevel up one
                     const levels = taxLevels;
                     const idx = levels.indexOf(filters.colorByLevel);
                     if (idx > 0) {
@@ -100,15 +99,16 @@
                     filters.taxonFilter = '';
                   }}
                   title="Go up one level"
-                >&#x25B4;</button>
-                <p class="text-[10px] text-cyan-400">
+                >&#x25B4; Up</button>
+                <p class="text-xs text-cyan-400">
                   {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})
                 </p>
               </div>
             {:else}
               <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
             {/if}
-            {#each taxColors.ranked as item}
+            {@const filterRe = (() => { try { return filters.taxonFilter ? new RegExp(filters.taxonFilter, 'i') : null; } catch { return null; } })()}
+            {#each taxColors.ranked.filter(item => !filterRe || filterRe.test(item.name)) as item}
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
                 onclick={() => {
