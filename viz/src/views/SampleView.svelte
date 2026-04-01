@@ -4,7 +4,7 @@
   import {
     store, countsBySample,
     GROUP_COLORS, GROUP_HEX,
-    buildTaxColorMap, getAsvColor, hexToRegl,
+    buildTaxColorMap, getAsvColor,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -152,12 +152,39 @@
   $effect(() => {
     if (!scatterplot || filteredSamples.length === 0) return;
 
+    const cmap = taxColorMap?.colorMap;
+
+    // Base sample points
     const xArr = filteredSamples.map(s => s.x);
     const yArr = filteredSamples.map(s => s.y);
     const sizes = filteredSamples.map(s => Math.max(25, Math.log2((s.total_reads ?? 1) + 1) * 12));
-    const zArr = filteredSamples.map(() => 0);
+    const hexArr = filteredSamples.map(() => '#556677');
 
-    scatterplot.set({ pointColor: ['#8899aa'], colorBy: 'valueZ', opacity: 0.5 });
+    // Overlay points (taxa circles at sample positions)
+    if (filters.showOverlay && overlayPoints.length > 0) {
+      for (const pt of overlayPoints) {
+        xArr.push(pt.x);
+        yArr.push(pt.y);
+        sizes.push(Math.max(5, pt.size * 10));
+
+        const asv = store.asvs[pt.asvIdx];
+        if (cmap && asv) {
+          hexArr.push(getAsvColor(asv.id, filters.colorByLevel, cmap));
+        } else if (asv) {
+          hexArr.push(GROUP_HEX[asv.group ?? 'prokaryote'] ?? GROUP_HEX.unknown);
+        } else {
+          hexArr.push('#999999');
+        }
+      }
+    }
+
+    // Build palette + z indices
+    const uniqueColors = [...new Set(hexArr)];
+    const colorIdx = {};
+    uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
+    const zArr = hexArr.map(c => colorIdx[c]);
+
+    scatterplot.set({ pointColor: uniqueColors, colorBy: 'valueZ', opacity: 0.7 });
     scatterplot.draw({
       x: xArr,
       y: yArr,
