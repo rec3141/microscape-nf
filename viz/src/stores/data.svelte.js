@@ -172,9 +172,23 @@ export function getEffectiveColorLevel(colorByLevel, taxonFilter) {
 
   if (matchCount === 1) {
     if (levelIdx < levels.length - 1) {
-      return levels[levelIdx + 1];
+      // Check if the next level down actually has data for the filtered set
+      const nextLevel = levels[levelIdx + 1];
+      const nextLevelIdx = levelIdx + 1;
+      let hasNextLevelData = false;
+      try {
+        const filterLower = taxonFilter.toLowerCase();
+        for (const asvId in assignments) {
+          const fullTax = assignments[asvId].filter(Boolean).join(';').toLowerCase();
+          if (fullTax.includes(filterLower) && assignments[asvId]?.[nextLevelIdx]) {
+            hasNextLevelData = true;
+            break;
+          }
+        }
+      } catch {}
+      if (hasNextLevelData) return nextLevel;
     }
-    // At the deepest level (e.g. Genus) — color by individual ASV
+    // At deepest level or next level has no data — color by individual ASV
     return '_asv';
   }
 
