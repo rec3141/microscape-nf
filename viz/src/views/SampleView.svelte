@@ -132,7 +132,7 @@
       title: { text: `${filteredSamples.length} samples`, font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
     };
 
-    const config = { scrollZoom: true, displayModeBar: false };
+    const config = { scrollZoom: true, displayModeBar: false, doubleClick: false };
 
     if (!hasPlot) {
       Plotly.newPlot(plotDiv, overlayTraces, layout, config);
@@ -151,9 +151,6 @@
         }
       });
 
-      plotDiv.on('plotly_doubleclick', () => {
-        store.selectedSample = null;
-      });
     } else {
       // Preserve user's current zoom
       const curLayout = plotDiv.layout;
@@ -169,6 +166,8 @@
       Plotly.relayout(plotDiv, { dragmode: 'lasso' });
     } else if (e.type === 'keyup' && e.key === 'Shift') {
       Plotly.relayout(plotDiv, { dragmode: 'pan' });
+    } else if (e.type === 'keydown' && e.key === 'Escape') {
+      store.selectedSample = null;
     }
   }
 

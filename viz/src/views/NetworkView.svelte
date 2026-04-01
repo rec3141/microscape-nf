@@ -72,7 +72,7 @@
       title: { text: `${filteredAsvs.length} ASVs`, font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
     };
 
-    const config = { scrollZoom: true, displayModeBar: false };
+    const config = { scrollZoom: true, displayModeBar: false, doubleClick: false };
 
     if (!hasPlot) {
       Plotly.newPlot(plotDiv, [trace], layout, config);
@@ -86,9 +86,6 @@
         }
       });
 
-      plotDiv.on('plotly_doubleclick', () => {
-        store.selectedAsv = null;
-      });
     } else {
       const curLayout = plotDiv.layout;
       if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
@@ -103,6 +100,8 @@
       Plotly.relayout(plotDiv, { dragmode: 'lasso' });
     } else if (e.type === 'keyup' && e.key === 'Shift') {
       Plotly.relayout(plotDiv, { dragmode: 'pan' });
+    } else if (e.type === 'keydown' && e.key === 'Escape') {
+      store.selectedAsv = null;
     }
   }
 
