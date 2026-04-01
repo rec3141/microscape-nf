@@ -1,6 +1,8 @@
 <script>
   import { store, GROUP_HEX } from '../stores/data.svelte.js';
 
+  let { filters = {} } = $props();
+
   // ── Tab state ─────────────────────────────────────────────────────────────
   let activeTable = $state('asvs'); // 'asvs' | 'samples'
   let search = $state('');

@@ -1,9 +1,11 @@
 <script>
   import PhylocanvasTree from '../components/PhylocanvasTree.svelte';
   import {
-    store, countsByAsv,
+    store,
     GROUP_COLORS, GROUP_HEX,
   } from '../stores/data.svelte.js';
+
+  let { filters = {} } = $props();
 
   // ---- Layout cycle ----
   let treeType = $state('rc');
@@ -37,42 +39,28 @@
     return colorDefs.find(c => c.key === colorBy)?.label || colorBy;
   }
 
-  // ---- Palette ----
   const palette = ['#22d3ee', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#fb923c',
                    '#2dd4bf', '#818cf8', '#f472b6', '#4ade80', '#e879f9', '#38bdf8',
                    '#94a3b8', '#d4d4d8', '#78716c', '#64748b', '#475569'];
 
   function hexToRgba(hex) {
+    if (!hex || hex[0] !== '#') return [148, 163, 184, 255];
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
     return [r, g, b, 255];
   }
 
-  // ---- ASV lookup ----
-  let asvById = $derived.by(() => {
-    const map = {};
-    for (const a of store.asvs) {
-      map[a.id] = a;
-    }
-    return map;
-  });
-
   // ---- Taxonomy data ----
   let primaryDb = $derived(Object.keys(store.taxonomy)[0] || null);
-
   let taxByAsv = $derived.by(() => {
     if (!primaryDb || !store.taxonomy[primaryDb]?.assignments) return {};
     return store.taxonomy[primaryDb].assignments;
   });
-
   let taxLevels = $derived(
-    primaryDb && store.taxonomy[primaryDb]?.levels
-      ? store.taxonomy[primaryDb].levels
-      : []
+    primaryDb && store.taxonomy[primaryDb]?.levels ? store.taxonomy[primaryDb].levels : []
   );
 
-  // Unique phyla for coloring
   let uniquePhyla = $derived.by(() => {
     const phyla = new Set();
     const phylumIdx = taxLevels.indexOf('Phylum');
@@ -84,6 +72,28 @@
     return [...phyla].sort();
   });
 
+  // ---- Taxonomy regex for filtering ----
+  let taxonRe = $derived(() => {
+    try { return filters.taxonFilter ? new RegExp(filters.taxonFilter, 'i') : null; }
+    catch { return null; }
+  });
+
+  // ---- Filtered ASV set (by taxonomy, group, prevalence) ----
+  let filteredAsvIds = $derived.by(() => {
+    const re = taxonRe();
+    const gf = filters.groupFlags || {};
+    const minPrev = filters.treeMinPrevalence || 0;
+    const ids = new Set();
+    for (const asv of store.asvs) {
+      if ((asv.prevalence ?? 0) < minPrev) continue;
+      const group = asv.group ?? 'unknown';
+      if (gf[group] === false) continue;
+      if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
+      ids.add(asv.id);
+    }
+    return ids;
+  });
+
   // ---- Node styles ----
   let nodeStyles = $derived.by(() => {
     const styles = {};
@@ -91,8 +101,18 @@
 
     for (const asv of store.asvs) {
       const id = asv.id;
-      let color;
+      const isFiltered = filteredAsvIds.has(id);
 
+      if (!isFiltered) {
+        styles[id] = {
+          fillColour: [71, 85, 105, 60],
+          shape: 'circle',
+          nodeSize: 0.3,
+        };
+        continue;
+      }
+
+      let color;
       if (colorBy === 'group') {
         color = GROUP_HEX[asv.group] || GROUP_HEX.unknown;
       } else if (colorBy === 'phylum') {
@@ -104,8 +124,6 @@
         const maxReads = Math.max(...store.asvs.map(a => a.total_reads || 0), 1);
         const frac = Math.log2(reads + 1) / Math.log2(maxReads + 1);
         const r = Math.round(255 * frac);
-        color = `rgb(${r}, ${255 - r}, 100)`;
-        // Convert to hex
         const toHex = (v) => Math.min(255, Math.max(0, v)).toString(16).padStart(2, '0');
         color = `#${toHex(r)}${toHex(255 - r)}${toHex(100)}`;
       }
@@ -117,6 +135,13 @@
       };
     }
     return styles;
+  });
+
+  // ---- ASV lookup ----
+  let asvById = $derived.by(() => {
+    const map = {};
+    for (const a of store.asvs) map[a.id] = a;
+    return map;
   });
 
   // ---- Click handling ----
@@ -147,7 +172,7 @@
       {layoutLabel()} &#x25BE;
     </button>
 
-    <span class="text-slate-400">Color by:</span>
+    <span class="text-slate-400">Color:</span>
     <button
       class="px-3 py-1 rounded-md border border-cyan-400 bg-cyan-400/10 text-cyan-400"
       style="min-width: 5rem"
@@ -156,7 +181,7 @@
       {colorLabel()} &#x25BE;
     </button>
 
-    <span class="text-slate-500 ml-auto">{store.asvs.length} ASVs</span>
+    <span class="text-slate-500 ml-auto">{filteredAsvIds.size} / {store.asvs.length} ASVs</span>
   </div>
 
   <!-- Tree + info panel -->
@@ -165,7 +190,7 @@
       <div class="flex-1 flex items-center justify-center">
         <div class="text-center">
           <p class="text-slate-400 mb-2">No phylogenetic tree available</p>
-          <p class="text-xs text-slate-500">Re-run the pipeline with <code class="bg-slate-800 px-1.5 py-0.5 rounded text-cyan-400">--run_phylogeny</code></p>
+          <p class="text-xs text-slate-500">Run with <code class="bg-slate-800 px-1.5 py-0.5 rounded text-cyan-400">--run_phylogeny</code></p>
         </div>
       </div>
     {:else}

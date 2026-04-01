@@ -1,0 +1,160 @@
+<script>
+  import { store, GROUP_HEX } from '../stores/data.svelte.js';
+
+  let { activeTab = 'samples', filters = $bindable({}) } = $props();
+
+  // Collapsible sections
+  let sections = $state({
+    taxonomy: true,
+    samples: true,
+    network: true,
+    phylogeny: true,
+  });
+
+  function toggle(section) {
+    sections[section] = !sections[section];
+  }
+
+  // Taxonomy levels from data
+  let taxLevels = $derived(
+    store.taxonomy[Object.keys(store.taxonomy)[0]]?.levels || []
+  );
+</script>
+
+<aside class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900/60">
+  <div class="p-3 border-b border-slate-800">
+    <p class="text-xs text-slate-500">{store.samples.length} samples | {store.asvs.length} ASVs</p>
+  </div>
+
+  <!-- ══ Taxonomy Filters (shared) ══ -->
+  <div class="border-b border-slate-800">
+    <button class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200" onclick={() => toggle('taxonomy')}>
+      Taxonomy
+      <span class="text-[10px]">{sections.taxonomy ? '▾' : '▸'}</span>
+    </button>
+    {#if sections.taxonomy}
+      <div class="space-y-3 px-3 pb-3">
+        <label class="block">
+          <span class="text-xs text-slate-400">Filter (regex)</span>
+          <input
+            type="text"
+            bind:value={filters.taxonFilter}
+            placeholder="e.g. Proteobacteria"
+            class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+          />
+        </label>
+
+        <fieldset class="space-y-1">
+          <legend class="text-xs text-slate-400">Groups</legend>
+          {#each Object.keys(filters.groupFlags || {}) as group}
+            <label class="flex items-center gap-2 text-sm capitalize">
+              <input type="checkbox" bind:checked={filters.groupFlags[group]} class="accent-blue-500" />
+              <span class="inline-block h-2.5 w-2.5 rounded-full" style="background:{GROUP_HEX[group]}"></span>
+              {group}
+            </label>
+          {/each}
+        </fieldset>
+      </div>
+    {/if}
+  </div>
+
+  <!-- ══ Sample Controls ══ -->
+  {#if activeTab === 'samples'}
+    <div class="border-b border-slate-800">
+      <button class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200" onclick={() => toggle('samples')}>
+        Sample Filters
+        <span class="text-[10px]">{sections.samples ? '▾' : '▸'}</span>
+      </button>
+      {#if sections.samples}
+        <div class="space-y-3 px-3 pb-3">
+          <label class="block">
+            <span class="text-xs text-slate-400">Min reads: {(filters.minReads || 0).toLocaleString()}</span>
+            <input type="range" min="0" max="50000" step="100" bind:value={filters.minReads} class="mt-1 w-full accent-blue-500" />
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-slate-400">Sample filter (regex)</span>
+            <input
+              type="text"
+              bind:value={filters.sampleFilter}
+              placeholder="e.g. Plate1"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+          </label>
+
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" bind:checked={filters.showOverlay} class="accent-blue-500" />
+            Show taxa overlay
+          </label>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- ══ Network Controls ══ -->
+  {#if activeTab === 'network'}
+    <div class="border-b border-slate-800">
+      <button class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200" onclick={() => toggle('network')}>
+        Network Filters
+        <span class="text-[10px]">{sections.network ? '▾' : '▸'}</span>
+      </button>
+      {#if sections.network}
+        <div class="space-y-3 px-3 pb-3">
+          <label class="block">
+            <span class="text-xs text-slate-400">Min prevalence: {filters.minPrevalence || 0}</span>
+            <input type="range" min="0" max="100" step="1" bind:value={filters.minPrevalence} class="mt-1 w-full accent-blue-500" />
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-slate-400">Correlation threshold: {(filters.corrThreshold || 0.3).toFixed(2)}</span>
+            <input type="range" min="0" max="1" step="0.01" bind:value={filters.corrThreshold} class="mt-1 w-full accent-blue-500" />
+          </label>
+
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" bind:checked={filters.showEdges} class="accent-blue-500" />
+            Show edges
+          </label>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- ══ Phylogeny Controls ══ -->
+  {#if activeTab === 'phylogeny'}
+    <div class="border-b border-slate-800">
+      <button class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200" onclick={() => toggle('phylogeny')}>
+        Phylogeny
+        <span class="text-[10px]">{sections.phylogeny ? '▾' : '▸'}</span>
+      </button>
+      {#if sections.phylogeny}
+        <div class="space-y-3 px-3 pb-3">
+          <label class="block">
+            <span class="text-xs text-slate-400">Min prevalence: {filters.treeMinPrevalence || 0}</span>
+            <input type="range" min="0" max="100" step="1" bind:value={filters.treeMinPrevalence} class="mt-1 w-full accent-blue-500" />
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-slate-400">Tip labels</span>
+            <select bind:value={filters.treeLabelLevel} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
+              <option value="id">ASV ID</option>
+              {#each taxLevels as level}
+                <option value={level}>{level}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- ══ Selection info ══ -->
+  <div class="mt-auto border-t border-slate-800 p-3">
+    {#if store.selectedSample != null}
+      <p class="text-xs text-slate-400">Selected: {store.samples[store.selectedSample]?.id || ''}</p>
+    {:else if store.selectedAsv != null}
+      <p class="text-xs text-slate-400">Selected: {store.asvs[store.selectedAsv]?.id || ''}</p>
+    {:else}
+      <p class="text-xs text-slate-500">Click a point to select</p>
+    {/if}
+  </div>
+</aside>
