@@ -180,7 +180,7 @@
     for (const entry of overlayEntries) {
       xArr.push(entry.x);
       yArr.push(entry.y);
-      sizes.push(Math.max(5, Math.sqrt(entry.proportion) * 80));
+      sizes.push(Math.max(3, Math.pow(entry.proportion, 0.25) * 50));
 
       const asv = store.asvs[entry.asvIdx];
       if (cmap && asv) {
