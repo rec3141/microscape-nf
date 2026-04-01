@@ -86,6 +86,9 @@
         }
       });
     } else {
+      const curLayout = plotDiv.layout;
+      if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
+      if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
       Plotly.react(plotDiv, [trace], layout, config);
     }
   });

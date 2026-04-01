@@ -135,7 +135,7 @@
     const config = { scrollZoom: true, displayModeBar: false };
 
     if (!hasPlot) {
-      Plotly.newPlot(plotDiv, [...overlayTraces], layout, config);
+      Plotly.newPlot(plotDiv, overlayTraces, layout, config);
       hasPlot = true;
 
       plotDiv.on('plotly_click', (data) => {
@@ -152,7 +152,11 @@
         }
       });
     } else {
-      Plotly.react(plotDiv, [...overlayTraces], layout, config);
+      // Preserve user's current zoom
+      const curLayout = plotDiv.layout;
+      if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
+      if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
+      Plotly.react(plotDiv, overlayTraces, layout, config);
     }
   });
 
