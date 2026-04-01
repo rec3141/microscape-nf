@@ -64,10 +64,10 @@
         <label class="block">
           <span class="text-xs text-slate-400">Color by</span>
           <select bind:value={filters.colorByLevel} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
-            <option value="group">Group (broad)</option>
             {#each taxLevels as level}
               <option value={level}>{level}</option>
             {/each}
+            <option value="group">Group (broad)</option>
           </select>
         </label>
 
@@ -90,20 +90,14 @@
               {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})
             </p>
             {#if filters.taxonFilter || effectiveLevel !== filters.colorByLevel}
-              {@const upLevel = (() => { const idx = taxLevels.indexOf(filters.colorByLevel); return idx > 0 ? taxLevels[idx - 1] : 'group'; })()}
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-1 text-cyan-400 border-b border-slate-700 mb-1"
                 onclick={() => {
-                  const idx = taxLevels.indexOf(filters.colorByLevel);
-                  if (idx > 0) {
-                    filters.colorByLevel = taxLevels[idx - 1];
-                  } else {
-                    filters.colorByLevel = 'group';
-                  }
+                  filters.colorByLevel = filters.colorByLevel;
                   filters.taxonFilter = '';
                 }}
               >
-                &#x25B4; Up to {upLevel === 'group' ? 'Group' : upLevel}
+                &#x25B4; Up to {filters.colorByLevel}
               </button>
             {/if}
             {#each taxColors.ranked as item}
