@@ -95,13 +95,19 @@
     const yArr = filteredAsvs.map(a => a.y ?? 0);
     const sizes = filteredAsvs.map(a => Math.max(25, Math.log2((a.total_reads ?? 1) + 1) * 12));
     const cmap = filters.colorByLevel !== 'group' ? buildTaxColorMap(filters.colorByLevel).colorMap : null;
-    const colors = filteredAsvs.map(a => {
+    const perPointHex = filteredAsvs.map(a => {
       if (cmap) return getAsvColor(a.id, filters.colorByLevel, cmap);
       return GROUP_HEX[a.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
     });
 
-    scatterplot.set({ pointColor: colors });
-    scatterplot.draw({ x: xArr, y: yArr, size: sizes }).then(() => {
+    // Build palette + index mapping for regl-scatterplot
+    const uniqueColors = [...new Set(perPointHex)];
+    const colorIdx = {};
+    uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
+    const zArr = perPointHex.map(c => colorIdx[c]);
+
+    scatterplot.set({ pointColor: uniqueColors, colorBy: 'valueZ' });
+    scatterplot.draw({ x: xArr, y: yArr, z: zArr, size: sizes }).then(() => {
       if (!hasZoomed) {
         scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
           padding: 0.2, transition: true, transitionDuration: 500,
