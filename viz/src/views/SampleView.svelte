@@ -38,13 +38,21 @@
     const sampleId = store.samples[store.selectedSample]?.id;
     const entries = cMap.get(sampleId) ?? [];
     const total = entries.reduce((s, e) => s + e.count, 0) || 1;
+    const re = taxonRe();
+    const gf = filters.groupFlags || {};
     return entries
       .map(e => ({
         asv: store.asvs[e.asv_idx],
         count: e.count,
         pct: ((e.count / total) * 100).toFixed(1),
       }))
-      .filter(e => e.asv)
+      .filter(e => {
+        if (!e.asv) return false;
+        const group = e.asv.group ?? 'prokaryote';
+        if (gf[group] === false) return false;
+        if (re && !(re.test(e.asv.taxonomy ?? '') || re.test(e.asv.id ?? ''))) return false;
+        return true;
+      })
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
   });
