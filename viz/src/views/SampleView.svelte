@@ -37,25 +37,20 @@
     catch { return null; }
   });
 
-  let taxColorMap = $derived.by(() => {
-    if (filters.colorByLevel === 'group') return null;
-    return buildTaxColorMap(filters.colorByLevel);
-  });
-
-  let overlayPoints = $derived.by(() => {
+  // Overlay: per-sample ASV entries placed at sample position, sorted large-to-small
+  let overlayEntries = $derived.by(() => {
     if (!filters.showOverlay || filteredSamples.length === 0 || store.asvs.length === 0) return [];
 
     const re = taxonRe();
-    const pts = [];
     const gf = filters.groupFlags || {};
-    const cmap = taxColorMap?.colorMap;
+    const entries = [];
 
     for (const sample of filteredSamples) {
       const sIdx = store.samples.indexOf(sample);
-      const entries = cMap.get(sIdx) ?? [];
-      const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
+      const counts = cMap.get(sIdx) ?? [];
+      const totalCount = counts.reduce((s, e) => s + e.count, 0) || 1;
 
-      for (const { asv_idx, count } of entries) {
+      for (const { asv_idx, count } of counts) {
         const asv = store.asvs[asv_idx];
         if (!asv) continue;
 
@@ -63,25 +58,18 @@
         if (gf[group] === false) continue;
         if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
 
-        const proportion = count / totalCount;
-        let color;
-        if (cmap) {
-          color = hexToRegl(getAsvColor(asv.id, filters.colorByLevel, cmap));
-        } else {
-          color = GROUP_COLORS[group] ?? GROUP_COLORS.prokaryote;
-        }
-
-        pts.push({
-          x: sample.x + (Math.random() - 0.5) * 0.3,
-          y: sample.y + (Math.random() - 0.5) * 0.3,
-          size: Math.max(1, proportion * 20),
-          color,
+        entries.push({
+          x: sample.x,
+          y: sample.y,
+          proportion: count / totalCount,
           sampleIdx: sIdx,
           asvIdx: asv_idx,
         });
       }
     }
-    return pts;
+    // Sort largest first so they draw behind smaller ones
+    entries.sort((a, b) => b.proportion - a.proportion);
+    return entries;
   });
 
   let topTaxa = $derived.by(() => {
@@ -124,12 +112,14 @@
       });
 
       sp.subscribe('pointover', (idx) => {
-        const s = filteredSamples[idx];
+        // Map any layer back to sample index
+        const sampleIdx = idx < numBasePts ? idx : idx % numBasePts;
+        const s = filteredSamples[sampleIdx];
         if (s) {
           tooltip = {
             show: true,
             x: 0, y: 0,
-            text: `${s.id ?? 'Sample ' + idx} | ${(s.total_reads ?? 0).toLocaleString()} reads`,
+            text: `${s.id ?? 'Sample ' + sampleIdx} | ${(s.total_reads ?? 0).toLocaleString()} reads`,
           };
         }
       });
@@ -140,7 +130,8 @@
 
       sp.subscribe('select', ({ points: indices }) => {
         if (indices.length > 0) {
-          const sIdx = store.samples.indexOf(filteredSamples[indices[0]]);
+          const sampleIdx = indices[0] < numBasePts ? indices[0] : indices[0] % numBasePts;
+          const sIdx = store.samples.indexOf(filteredSamples[sampleIdx]);
           store.selectedSample = sIdx >= 0 ? sIdx : null;
         }
       });
@@ -149,33 +140,53 @@
     }
   });
 
+  // Track how many base points for click routing
+  let numBasePts = 0;
+
   $effect(() => {
     if (!scatterplot || filteredSamples.length === 0) return;
 
-    const cmap = taxColorMap?.colorMap;
+    // Read colorByLevel to ensure reactivity
+    const colorLevel = filters.colorByLevel;
+    const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel).colorMap : null;
 
-    // Base sample points
-    const xArr = filteredSamples.map(s => s.x);
-    const yArr = filteredSamples.map(s => s.y);
-    const sizes = filteredSamples.map(s => Math.max(25, Math.log2((s.total_reads ?? 1) + 1) * 12));
-    const hexArr = filteredSamples.map(() => '#556677');
+    const xArr = [];
+    const yArr = [];
+    const sizes = [];
+    const hexArr = [];
 
-    // Overlay points (taxa circles at sample positions)
-    if (filters.showOverlay && overlayPoints.length > 0) {
-      for (const pt of overlayPoints) {
-        xArr.push(pt.x);
-        yArr.push(pt.y);
-        sizes.push(Math.max(5, pt.size * 10));
+    // Layer 1: gray base points (background)
+    for (const s of filteredSamples) {
+      xArr.push(s.x);
+      yArr.push(s.y);
+      sizes.push(Math.max(30, Math.log2((s.total_reads ?? 1) + 1) * 14));
+      hexArr.push('#445566');
+    }
 
-        const asv = store.asvs[pt.asvIdx];
-        if (cmap && asv) {
-          hexArr.push(getAsvColor(asv.id, filters.colorByLevel, cmap));
-        } else if (asv) {
-          hexArr.push(GROUP_HEX[asv.group ?? 'prokaryote'] ?? GROUP_HEX.unknown);
-        } else {
-          hexArr.push('#999999');
-        }
+    // Layer 2: colored overlay (taxa at sample positions, large first)
+    for (const entry of overlayEntries) {
+      xArr.push(entry.x);
+      yArr.push(entry.y);
+      sizes.push(Math.max(5, Math.sqrt(Math.sqrt(entry.proportion)) * 80));
+
+      const asv = store.asvs[entry.asvIdx];
+      if (cmap && asv) {
+        hexArr.push(getAsvColor(asv.id, colorLevel, cmap));
+      } else if (asv) {
+        hexArr.push(GROUP_HEX[asv.group ?? 'prokaryote'] ?? GROUP_HEX.unknown);
+      } else {
+        hexArr.push('#999999');
       }
+    }
+
+    // Layer 3: transparent clickable points at sample positions (on top)
+    numBasePts = filteredSamples.length;
+    const clickLayerStart = xArr.length;
+    for (const s of filteredSamples) {
+      xArr.push(s.x);
+      yArr.push(s.y);
+      sizes.push(Math.max(30, Math.log2((s.total_reads ?? 1) + 1) * 14));
+      hexArr.push('rgba(0,0,0,0)');
     }
 
     // Build palette + z indices
