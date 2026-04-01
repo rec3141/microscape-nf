@@ -111,7 +111,7 @@
 
     scatterplot.set({
       pointColor: uniqueColors, colorBy: 'valueZ',
-      pointSize: [2, 40], sizeBy: 'valueW',
+      pointSize: [200, 4000], sizeBy: 'valueW',
     });
     scatterplot.draw({ x: xArr, y: yArr, z: zArr, w: wArr }).then(() => {
       if (!hasZoomed) {

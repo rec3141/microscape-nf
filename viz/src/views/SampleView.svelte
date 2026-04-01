@@ -202,8 +202,8 @@
     uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
     const zArr = hexArr.map(c => colorIdx[c]);
 
-    const minPx = 2 * scale;
-    const maxPx = 40 * scale;
+    const minPx = 200 * scale;
+    const maxPx = 4000 * scale;
 
     scatterplot.set({
       pointColor: uniqueColors, colorBy: 'valueZ',
