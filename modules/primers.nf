@@ -1,8 +1,11 @@
 // Primer removal with cutadapt.
 //
-// Removes primer sequences from paired-end reads. Supports auto-detection
-// of primer set based on filename prefix (16S, 18S, ITS) or a user-supplied
-// primer FASTA. Reads without primer matches are discarded (--discard-untrimmed).
+// Removes primer sequences from paired-end reads using separate forward and
+// reverse primer files. R1 must match a forward primer and R2 must match a
+// reverse primer — pairs missing either are discarded.
+//
+// Auto-detection selects primer set by filename prefix (16S, 18S, ITS).
+// Default: bacterial 16S (515F/806RB).
 
 process REMOVE_PRIMERS {
     tag "${meta.id}"
@@ -19,20 +22,27 @@ process REMOVE_PRIMERS {
     path("${meta.id}_cutadapt.log"), emit: log
 
     script:
-    // Auto-select primer file based on sample name prefix
-    def primer_file = params.primers ?: (
+    // Auto-select primer files based on sample name prefix
+    def fwd_file = params.primers_fwd ?: (
         params.primer_auto ? (
-            meta.id =~ /^16/ ? params.primers_bac :
-            meta.id =~ /^18/ ? params.primers_euk :
-            meta.id =~ /^ITS/ ? params.primers_its :
-            params.primers_all
-        ) : params.primers_all
+            meta.id =~ /^18/ ? params.primers_fwd_euk :
+            meta.id =~ /^ITS/ ? params.primers_fwd_its :
+            params.primers_fwd_bac
+        ) : params.primers_fwd_bac
+    )
+    def rev_file = params.primers_rev ?: (
+        params.primer_auto ? (
+            meta.id =~ /^18/ ? params.primers_rev_euk :
+            meta.id =~ /^ITS/ ? params.primers_rev_its :
+            params.primers_rev_bac
+        ) : params.primers_rev_bac
     )
     """
     cutadapt \\
-        -g file:${primer_file} \\
-        -G file:${primer_file} \\
+        -g file:${fwd_file} \\
+        -G file:${rev_file} \\
         --discard-untrimmed \\
+        --pair-filter=any \\
         -j ${task.cpus} \\
         -e ${params.primer_error_rate} \\
         -o ${meta.id}_R1.trimmed.fastq.gz \\

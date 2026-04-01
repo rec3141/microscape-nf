@@ -6,11 +6,11 @@ nextflow.enable.dsl = 2
 // ============================================================================
 //
 // Amplicon sequencing analysis pipeline: demultiplexing, primer removal,
-// DADA2 denoising, chimera removal, taxonomy assignment, phylogeny,
-// normalization, clustering, network analysis, and Shiny visualization.
+// denoising, chimera removal, taxonomy assignment, phylogeny,
+// normalization, clustering, network analysis, and visualization.
 //
 // Usage:
-//   nextflow run main.nf --input /path/to/reads --primers primers-all.fa -resume
+//   nextflow run main.nf --input /path/to/reads -resume
 //
 // ============================================================================
 
@@ -30,11 +30,12 @@ def helpMessage() {
 
     Required:
       --input DIR          Input directory containing demultiplexed paired-end
-                           *.fastq.gz files (PLATE_WELL_R{1,2}.fastq.gz)
+                           *.fastq.gz files
 
     Primer removal:
-      --primer_auto        Auto-select primer file by filename prefix [default: true]
-      --primers PATH       Primer FASTA (overrides auto-selection)
+      --primer_auto        Auto-select primer pair by filename prefix [default: true]
+      --primers_fwd PATH   Forward primer FASTA (overrides auto-selection)
+      --primers_rev PATH   Reverse primer FASTA (overrides auto-selection)
       --primer_error_rate  Cutadapt error rate [default: 0.12]
 
     Demultiplexing (optional):
@@ -42,7 +43,7 @@ def helpMessage() {
       --forward_bcs PATH   Forward barcode file
       --reverse_bcs PATH   Reverse barcode file
 
-    DADA2 parameters:
+    Denoising parameters:
       --maxEE N            Max expected errors [default: 2]
       --truncQ N           Truncation quality [default: 11]
       --maxN N             Max Ns [default: 0]
@@ -77,8 +78,8 @@ def helpMessage() {
 
     Resources:
       --threads N          General thread count [default: 8]
-      --dada_cpus N        CPUs for DADA2 processes [default: 8]
-      --dada_memory S      Memory for DADA2 processes [default: '16 GB']
+      --denoise_cpus N     CPUs for denoising processes [default: 8]
+      --denoise_memory S   Memory for denoising processes [default: '16 GB']
     """.stripIndent()
 }
 
@@ -105,12 +106,12 @@ if (params.run_demultiplex && (!params.forward_bcs || !params.reverse_bcs)) {
 // Module imports
 // ============================================================================
 
-// Stage A: Preprocessing and DADA2
+// Stage A: Preprocessing and denoising
 include { DEMULTIPLEX }       from './modules/demultiplex'
 include { REMOVE_PRIMERS }    from './modules/primers'
-include { DADA2_FILTER_TRIM } from './modules/dada2'
-include { DADA2_LEARN_ERRORS } from './modules/dada2'
-include { DADA2_DENOISE }     from './modules/dada2'
+include { FILTER_TRIM }       from './modules/denoise'
+include { LEARN_ERRORS }      from './modules/denoise'
+include { DENOISE }           from './modules/denoise'
 include { MERGE_SEQTABS }     from './modules/merge'
 include { REMOVE_CHIMERAS }   from './modules/merge'
 include { FILTER_SEQTAB }     from './modules/merge'
@@ -184,10 +185,10 @@ workflow {
     }
 
     // 4a. Filter and trim per-sample
-    DADA2_FILTER_TRIM(ch_trimmed)
+    FILTER_TRIM(ch_trimmed)
 
     // 4b. Group filtered reads by plate
-    ch_by_plate = DADA2_FILTER_TRIM.out.reads
+    ch_by_plate = FILTER_TRIM.out.reads
         .filter { meta, r1, r2 -> r1.size() > 0 && r2.size() > 0 }
         .map { meta, r1, r2 -> [meta.plate, r1, r2] }
         .groupTuple(by: 0)
@@ -196,14 +197,14 @@ workflow {
         }
 
     // 4c. Learn error rates per-plate
-    DADA2_LEARN_ERRORS(ch_by_plate)
+    LEARN_ERRORS(ch_by_plate)
 
     // 4d. Denoise per-plate using learned error rates
     //     Join filtered reads with error models by plate name
     ch_plate_reads = ch_by_plate
         .map { meta, r1s, r2s -> [meta.plate, meta, r1s, r2s] }
 
-    ch_plate_errors = DADA2_LEARN_ERRORS.out.error_models_rds
+    ch_plate_errors = LEARN_ERRORS.out.error_models
         .map { plate, meta, errF, errR -> [plate, errF, errR] }
 
     ch_denoise_input = ch_plate_reads
@@ -212,16 +213,16 @@ workflow {
             [meta, r1s, r2s, errF, errR]
         }
 
-    DADA2_DENOISE(ch_denoise_input)
+    DENOISE(ch_denoise_input)
 
     // 5. Merge all sequence tables and remove chimeras
-    ch_all_seqtabs = DADA2_DENOISE.out.seqtab.map { meta, rds -> rds }.collect()
+    ch_all_seqtabs = DENOISE.out.seqtab.map { meta, rds -> rds }.collect()
 
     MERGE_SEQTABS(ch_all_seqtabs)
 
-    // Per-plate chimera removal already happens in DADA2_DENOISE (both R and Python).
+    // Per-plate chimera removal already happens in DENOISE (both R and Python).
     // Post-merge chimera pass catches cross-plate chimeras.
-    def effectiveEngine = params.dada_engine ?: params.lang
+    def effectiveEngine = params.denoise_engine ?: params.lang
     if (effectiveEngine == 'python') {
         REMOVE_CHIMERAS(MERGE_SEQTABS.out.seqtab)
         FILTER_SEQTAB(REMOVE_CHIMERAS.out.seqtab)
@@ -280,8 +281,7 @@ workflow {
     if (params.ref_databases) {
         NETWORK_SPARCC(RENORMALIZE.out.merged, params.min_prevalence)
 
-        // 12. Build Shiny app (bundle all outputs)
-        //     Collect all taxonomy files into a directory
+        // 12. Build visualization (bundle all outputs)
         ch_tax_files = ASSIGN_TAXONOMY.out.taxonomy
             .map { db_name, tax, boot -> [tax, boot] }
             .flatten()

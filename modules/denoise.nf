@@ -1,24 +1,24 @@
-// DADA2 amplicon denoising processes.
+// Amplicon denoising processes.
 //
-// Three-step DADA2 workflow:
-//   1. DADA2_FILTER_TRIM   — per-sample quality filtering (uses --lang)
-//   2. DADA2_LEARN_ERRORS  — per-plate error model learning (uses --dada_engine)
-//   3. DADA2_DENOISE       — per-plate denoising + pair merging (uses --dada_engine)
+// Three-step workflow:
+//   1. FILTER_TRIM    — per-sample quality filtering (uses --lang)
+//   2. LEARN_ERRORS   — per-plate error model learning (uses --denoise_engine)
+//   3. DENOISE        — per-plate denoising + pair merging (uses --denoise_engine)
 //
-// --dada_engine controls which DADA2 implementation to use:
-//   'python' (default) = papa2 (byte-identical to R, no R dependency)
+// --denoise_engine controls which implementation to use:
+//   'python' (default) = papa2 (byte-identical to R dada2, no R dependency)
 //   'R' = R dada2 package (reference implementation)
 //
 // --lang controls filter_trim and downstream scripts independently.
 
-// Resolve effective DADA2 engine: explicit param > lang fallback
-def dadaEngine() { return params.dada_engine ?: params.lang }
+// Resolve effective denoise engine: explicit param > lang fallback
+def denoiseEngine() { return params.denoise_engine ?: params.lang }
 
-// Output extensions: dada2 steps always output .rds when engine=R
-def errExt() { return dadaEngine() == 'python' ? 'pkl' : 'rds' }
+// Output extensions: denoise steps always output .rds when engine=R
+def errExt() { return denoiseEngine() == 'python' ? 'pkl' : 'rds' }
 def seqExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 
-process DADA2_FILTER_TRIM {
+process FILTER_TRIM {
     tag "${meta.id}"
     label 'process_low'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
@@ -34,11 +34,29 @@ process DADA2_FILTER_TRIM {
     script:
     if (params.lang == 'python')
     """
-    dada2_filter_trim.py \
-        "${meta.id}" "${r1}" "${r2}" \
-        ${params.maxEE} ${params.truncQ} ${params.maxN} \
-        ${params.truncLen_fwd} ${params.truncLen_rev} \
-        ${task.cpus}
+    python3 -c "
+import os, pickle
+from papa2.filter import fastq_paired_filter
+
+sid = '${meta.id}'
+r1_out, r2_out = f'{sid}_R1.filt.fastq.gz', f'{sid}_R2.filt.fastq.gz'
+reads_in, reads_out = fastq_paired_filter(
+    '${r1}', r1_out, '${r2}', r2_out,
+    max_ee=(${params.maxEE}, ${params.maxEE}),
+    trunc_q=(${params.truncQ}, ${params.truncQ}),
+    max_n=(${params.maxN}, ${params.maxN}),
+    trunc_len=(${params.truncLen_fwd}, ${params.truncLen_rev}),
+    compress=True,
+)
+if reads_out == 0:
+    os.remove(r1_out); os.remove(r2_out)
+    open(r1_out, 'w').close(); open(r2_out, 'w').close()
+pct = round(reads_out / max(reads_in, 1) * 100, 1)
+with open(f'{sid}_filt_stats.tsv', 'w') as f:
+    f.write('sample\treads_in\treads_out\tpct_retained\n')
+    f.write(f'{sid}\t{reads_in}\t{reads_out}\t{pct}\n')
+print(f'[INFO] {sid}: {reads_out}/{reads_in} ({pct}%) passed filter')
+"
     """
     else
     """
@@ -50,11 +68,11 @@ process DADA2_FILTER_TRIM {
     """
 }
 
-// Learn error rates — uses dada_engine (R or python/dada2 py)
-process DADA2_LEARN_ERRORS {
+// Learn error rates — uses denoise_engine (R or python/papa2)
+process LEARN_ERRORS {
     tag "${meta.id}"
     label 'process_high'
-    conda ((params.dada_engine ?: params.lang) == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml")
+    conda ((params.denoise_engine ?: params.lang) == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml")
     publishDir "${params.outdir}/error_models", mode: 'copy', enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/error_models" : null
 
@@ -62,13 +80,13 @@ process DADA2_LEARN_ERRORS {
     tuple val(meta), path(r1_files), path(r2_files)
 
     output:
-    tuple val(meta.plate), val(meta), path("${meta.id}_errF.${errExt()}"), path("${meta.id}_errR.${errExt()}"), emit: error_models_rds
+    tuple val(meta.plate), val(meta), path("${meta.id}_errF.${errExt()}"), path("${meta.id}_errR.${errExt()}"), emit: error_models
     path("${meta.id}_error_rates.pdf"), emit: error_plots
 
     script:
-    if (dadaEngine() == 'python')
+    if (denoiseEngine() == 'python')
     """
-    dada2_learn_errors.py "${meta.id}" ${task.cpus}
+    learn_errors.py "${meta.id}" ${task.cpus}
     """
     else
     """
@@ -76,12 +94,12 @@ process DADA2_LEARN_ERRORS {
     """
 }
 
-// Per-plate denoising — uses dada_engine (R or python/dada2 py)
+// Per-plate denoising — uses denoise_engine (R or python/papa2)
 // Output is always .pkl when lang=python (converted from .rds by wrapper if needed)
-process DADA2_DENOISE {
+process DENOISE {
     tag "${meta.id}"
     label 'process_high'
-    conda ((params.dada_engine ?: params.lang) == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml")
+    conda ((params.denoise_engine ?: params.lang) == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml")
     publishDir "${params.outdir}/seqtabs", mode: 'copy', enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/seqtabs" : null
 
@@ -93,9 +111,9 @@ process DADA2_DENOISE {
     path("${meta.id}.seqtab.tsv"), emit: seqtab_tsv
 
     script:
-    if (dadaEngine() == 'python')
+    if (denoiseEngine() == 'python')
     """
-    dada2_denoise.py \
+    denoise.py \
         "${meta.id}" "${errF}" "${errR}" \
         ${params.min_overlap} ${task.cpus}
     """
