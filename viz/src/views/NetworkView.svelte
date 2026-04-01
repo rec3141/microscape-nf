@@ -62,7 +62,7 @@
     };
 
     const layout = {
-      dragmode: 'pan',
+      dragmode: 'lasso',
       xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false },
       yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x' },
       plot_bgcolor: 'rgba(2, 6, 15, 1)',
