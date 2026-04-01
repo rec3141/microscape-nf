@@ -4,22 +4,18 @@
 
   let { activeTab = 'samples', filters = $bindable({}) } = $props();
 
-  // When taxonFilter changes, auto-navigate to that taxon's level
-  let prevFilter = '';
-  $effect(() => {
-    const f = filters.taxonFilter;
-    if (f && f !== prevFilter && filters.colorMode === 'taxonomy') {
-      const level = findTaxonLevel(f);
-      if (level) {
-        // Push current state and navigate
-        const stack = [...(filters.navStack || [])];
-        stack.push({ level: filters.colorByLevel, filter: prevFilter });
-        filters.navStack = stack;
-        filters.colorByLevel = level;
-      }
+  // When user picks from autocomplete, navigate to that taxon's level
+  function navigateToTaxon(name) {
+    if (!name || name === 'unclassified' || filters.colorMode !== 'taxonomy') return;
+    const level = findTaxonLevel(name);
+    if (level) {
+      const stack = [...(filters.navStack || [])];
+      stack.push({ level: filters.colorByLevel, filter: filters.taxonFilter });
+      filters.navStack = stack;
+      filters.colorByLevel = level;
+      filters.taxonFilter = name;
     }
-    prevFilter = f;
-  });
+  }
 
   // Collapsible sections
   let sections = $state({
@@ -43,11 +39,10 @@
     const db = Object.keys(store.taxonomy)[0];
     if (!db || !store.taxonomy[db]?.assignments) return [];
     const terms = new Set();
-    const levels = store.taxonomy[db].levels || [];
     for (const asvId in store.taxonomy[db].assignments) {
       const vals = store.taxonomy[db].assignments[asvId];
       for (const v of vals) {
-        if (v) terms.add(v);
+        if (v && v !== 'unclassified') terms.add(v);
       }
     }
     return [...terms].sort();
@@ -76,6 +71,7 @@
           label="Filter (regex)"
           placeholder="e.g. Proteobacteria"
           candidates={taxCandidates}
+          onPick={navigateToTaxon}
         />
 
         <label class="block">
@@ -133,9 +129,8 @@
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
                 onclick={() => {
-                  // Don't drill deeper than individual ASVs
                   if (effectiveLevel === '_asv') return;
-                  // Push current state onto nav stack before drilling
+                  if (item.name === 'unclassified') return;
                   const stack = [...(filters.navStack || [])];
                   stack.push({ level: filters.colorByLevel, filter: filters.taxonFilter });
                   filters.navStack = stack;

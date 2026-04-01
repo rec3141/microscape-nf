@@ -5,6 +5,7 @@
     label = '',
     candidates = [],
     maxSuggestions = 8,
+    onPick = null,
   } = $props();
 
   let focused = $state(false);
@@ -23,6 +24,7 @@
     value = s;
     focused = false;
     selectedIdx = -1;
+    if (onPick) onPick(s);
   }
 
   function handleKeydown(e) {
