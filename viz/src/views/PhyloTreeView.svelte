@@ -64,7 +64,7 @@
 
   let taxColorMap = $derived.by(() => {
     if (effectiveColorLevel === 'group') return null;
-    return buildTaxColorMap(effectiveColorLevel);
+    return buildTaxColorMap(effectiveColorLevel, filters.taxonFilter);
   });
 
   let nodeStyles = $derived.by(() => {

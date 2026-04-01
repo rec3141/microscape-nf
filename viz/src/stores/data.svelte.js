@@ -61,13 +61,34 @@ function generatePalette(n) {
  * Build a color map: taxon name → hex color for the top N taxa at a level.
  * Returns { colorMap: {name: hex}, ranked: [{name, count, color}] }
  */
-export function buildTaxColorMap(level) {
+export function buildTaxColorMap(level, taxonFilter = '') {
   const db = Object.keys(store.taxonomy)[0];
   if (!db || !store.taxonomy[db]) return { colorMap: {}, ranked: [] };
 
+  const levels = store.taxonomy[db].levels || [];
+  const assignments = store.taxonomy[db].assignments || {};
+
+  // Build a set of ASV IDs that pass the taxonomy filter
+  // Filter checks the full taxonomy string (all levels joined)
+  let filteredAsvIds = null;
+  if (taxonFilter) {
+    try {
+      const re = new RegExp(taxonFilter, 'i');
+      filteredAsvIds = new Set();
+      for (const asvId in assignments) {
+        const fullTax = assignments[asvId].filter(Boolean).join(';');
+        if (re.test(fullTax) || re.test(asvId)) {
+          filteredAsvIds.add(asvId);
+        }
+      }
+    } catch {}
+  }
+
   // Special case: color by individual ASV ID
   if (level === '_asv') {
-    const asvIds = store.asvs.map(a => a.id).filter(Boolean);
+    const asvIds = store.asvs
+      .map(a => a.id)
+      .filter(id => id && (!filteredAsvIds || filteredAsvIds.has(id)));
     const palette = generatePalette(asvIds.length);
     const colorMap = {};
     const ranked = asvIds.map((id, i) => {
@@ -79,14 +100,13 @@ export function buildTaxColorMap(level) {
     return { colorMap, ranked };
   }
 
-  const levels = store.taxonomy[db].levels || [];
-  const assignments = store.taxonomy[db].assignments || {};
   const levelIdx = levels.indexOf(level);
   if (levelIdx < 0) return { colorMap: {}, ranked: [] };
 
-  // Count ASVs per taxon at this level
+  // Count ASVs per taxon at this level (only filtered ASVs)
   const counts = {};
   for (const asvId in assignments) {
+    if (filteredAsvIds && !filteredAsvIds.has(asvId)) continue;
     const val = assignments[asvId]?.[levelIdx];
     if (val) {
       counts[val] = (counts[val] || 0) + 1;
