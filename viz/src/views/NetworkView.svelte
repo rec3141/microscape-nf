@@ -106,14 +106,12 @@
     uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
     const zArr = perPointHex.map(c => colorIdx[c]);
 
-    const uniqueSizes = [...new Set(sizes)].sort((a, b) => a - b);
-    const sizeIdx = {};
-    uniqueSizes.forEach((s, i) => { sizeIdx[s] = i; });
-    const wArr = sizes.map(s => sizeIdx[s]);
+    const maxSize = Math.max(...sizes, 1);
+    const wArr = sizes.map(s => s / maxSize);
 
     scatterplot.set({
       pointColor: uniqueColors, colorBy: 'valueZ',
-      pointSize: uniqueSizes, sizeBy: 'valueW',
+      pointSize: [2, 40], sizeBy: 'valueW',
     });
     scatterplot.draw({ x: xArr, y: yArr, z: zArr, w: wArr }).then(() => {
       if (!hasZoomed) {

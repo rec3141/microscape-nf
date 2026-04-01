@@ -200,15 +200,16 @@
     uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
     const zArr = hexArr.map(c => colorIdx[c]);
 
-    // Build size palette + w indices (categorical: each unique size is a bin)
-    const uniqueSizes = [...new Set(sizes)].sort((a, b) => a - b);
-    const sizeIdx = {};
-    uniqueSizes.forEach((s, i) => { sizeIdx[s] = i; });
-    const wArr = sizes.map(s => sizeIdx[s]);
+    // Normalize sizes to 0-1 for continuous encoding
+    const maxSize = Math.max(...sizes, 1);
+    const wArr = sizes.map(s => s / maxSize);
+    const scale = filters.pointScale ?? 1;
+    const minPx = 2 * scale;
+    const maxPx = 60 * scale;
 
     scatterplot.set({
       pointColor: uniqueColors, colorBy: 'valueZ',
-      pointSize: uniqueSizes, sizeBy: 'valueW',
+      pointSize: [minPx, maxPx], sizeBy: 'valueW',
       opacity: 1.0,
     });
     scatterplot.draw({
