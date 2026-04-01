@@ -44,19 +44,24 @@ export const GROUP_HEX = {
 
 // ── Taxonomy coloring ─────────────────────────────────────────────────────
 
-/** 20 perceptually distinct colors for taxonomy (Tableau 20-ish) */
-const TAX_PALETTE = [
-  '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
-  '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac',
-  '#86bcb6', '#d37295', '#fabfd2', '#8cd17d', '#b6992d',
-  '#499894', '#e17c05', '#a0cbe8', '#f1ce63', '#d4a6c8',
-];
+/** Generate N perceptually spaced colors using golden-angle HSL */
+function generatePalette(n) {
+  const colors = [];
+  const golden = 137.508;
+  for (let i = 0; i < n; i++) {
+    const h = (i * golden) % 360;
+    const s = 55 + (i % 3) * 15;  // 55-85% saturation
+    const l = 45 + (i % 4) * 8;   // 45-69% lightness
+    colors.push(`hsl(${h}, ${s}%, ${l}%)`);
+  }
+  return colors;
+}
 
 /**
  * Build a color map: taxon name → hex color for the top N taxa at a level.
  * Returns { colorMap: {name: hex}, ranked: [{name, count, color}] }
  */
-export function buildTaxColorMap(level, maxColors = 18) {
+export function buildTaxColorMap(level) {
   const db = Object.keys(store.taxonomy)[0];
   if (!db || !store.taxonomy[db]) return { colorMap: {}, ranked: [] };
 
@@ -74,20 +79,16 @@ export function buildTaxColorMap(level, maxColors = 18) {
     }
   }
 
-  // Rank by count, assign colors to top N
+  // Rank by count, assign a unique color to every taxon
   const ranked = Object.entries(counts)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
+  const palette = generatePalette(ranked.length);
   const colorMap = {};
   for (let i = 0; i < ranked.length; i++) {
-    if (i < maxColors) {
-      ranked[i].color = TAX_PALETTE[i % TAX_PALETTE.length];
-      colorMap[ranked[i].name] = ranked[i].color;
-    } else {
-      ranked[i].color = '#475569';
-      colorMap[ranked[i].name] = '#475569';
-    }
+    ranked[i].color = palette[i];
+    colorMap[ranked[i].name] = palette[i];
   }
 
   return { colorMap, ranked };

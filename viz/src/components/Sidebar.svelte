@@ -86,7 +86,7 @@
           {@const taxColors = buildTaxColorMap(filters.colorByLevel)}
           <div class="space-y-0.5 max-h-48 overflow-y-auto">
             <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
-            {#each taxColors.ranked.slice(0, 20) as item}
+            {#each taxColors.ranked as item}
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
                 onclick={() => filters.taxonFilter = item.name}
@@ -96,9 +96,6 @@
                 <span class="ml-auto text-slate-500 shrink-0">{item.count}</span>
               </button>
             {/each}
-            {#if taxColors.ranked.length > 20}
-              <p class="text-[10px] text-slate-500 pl-1">+{taxColors.ranked.length - 20} more (gray)</p>
-            {/if}
           </div>
         {/if}
       </div>
