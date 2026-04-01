@@ -102,7 +102,7 @@
                   filters.taxonFilter = popped.filter;
                 }}
               >
-                &#x25B4; Up to {prev.filter || prev.level}
+                &#x25B4; Up{prev.filter ? ` to ${prev.filter}` : ` to ${prev.level}`}
               </button>
             {:else if filters.taxonFilter}
               <button
@@ -118,13 +118,13 @@
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
                 onclick={() => {
+                  // Don't drill deeper than individual ASVs
+                  if (effectiveLevel === '_asv') return;
                   // Push current state onto nav stack before drilling
                   const stack = [...(filters.navStack || [])];
                   stack.push({ level: filters.colorByLevel, filter: filters.taxonFilter });
                   filters.navStack = stack;
-                  if (effectiveLevel !== '_asv') {
-                    filters.colorByLevel = effectiveLevel;
-                  }
+                  filters.colorByLevel = effectiveLevel;
                   filters.taxonFilter = item.name;
                 }}
               >
