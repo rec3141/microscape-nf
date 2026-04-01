@@ -107,8 +107,7 @@
             {:else}
               <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
             {/if}
-            {@const filterRe = (() => { try { return filters.taxonFilter ? new RegExp(filters.taxonFilter, 'i') : null; } catch { return null; } })()}
-            {#each taxColors.ranked.filter(item => !filterRe || filterRe.test(item.name)) as item}
+            {#each taxColors.ranked.filter(item => { try { return !filters.taxonFilter || new RegExp(filters.taxonFilter, 'i').test(item.name); } catch { return true; } }) as item}
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
                 onclick={() => {
