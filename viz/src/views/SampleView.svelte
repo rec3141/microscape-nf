@@ -165,22 +165,26 @@
 
     const xArr = [];
     const yArr = [];
-    const sizes = [];
+    const wArr = [];
     const hexArr = [];
 
-    // Layer 1: gray base points (background)
+    const scale = filters.pointScale ?? 1;
+
+    // Layer 1: gray base points — all same w=0.3 (small)
     for (const s of filteredSamples) {
       xArr.push(s.x);
       yArr.push(s.y);
-      sizes.push(Math.max(30, Math.log2((s.total_reads ?? 1) + 1) * 14));
+      wArr.push(0.3);
       hexArr.push('#445566');
     }
 
-    // Layer 2: colored overlay (taxa at sample positions, large first)
+    numBasePts = filteredSamples.length;
+
+    // Layer 2: colored overlay — proportion^0.25 as w (0 to 1)
     for (const entry of overlayEntries) {
       xArr.push(entry.x);
       yArr.push(entry.y);
-      sizes.push(Math.max(3, Math.pow(entry.proportion, 0.25) * 50 * (filters.pointScale ?? 1)));
+      wArr.push(Math.pow(entry.proportion, 0.25));
 
       const asv = store.asvs[entry.asvIdx];
       if (cmap && asv) {
@@ -192,20 +196,14 @@
       }
     }
 
-    numBasePts = filteredSamples.length;
-
     // Build palette + z indices
     const uniqueColors = [...new Set(hexArr)];
     const colorIdx = {};
     uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
     const zArr = hexArr.map(c => colorIdx[c]);
 
-    // Normalize sizes to 0-1 for continuous encoding
-    const maxSize = Math.max(...sizes, 1);
-    const wArr = sizes.map(s => s / maxSize);
-    const scale = filters.pointScale ?? 1;
     const minPx = 2 * scale;
-    const maxPx = 60 * scale;
+    const maxPx = 40 * scale;
 
     scatterplot.set({
       pointColor: uniqueColors, colorBy: 'valueZ',
