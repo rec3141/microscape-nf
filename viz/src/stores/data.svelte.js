@@ -194,6 +194,29 @@ export function getEffectiveColorLevel(colorByLevel, taxonFilter) {
 }
 
 /**
+ * Find which taxonomy level a taxon name belongs to.
+ * Returns the level name (e.g. 'Phylum') or null if not found.
+ */
+export function findTaxonLevel(taxonName) {
+  const db = Object.keys(store.taxonomy)[0];
+  if (!db || !store.taxonomy[db] || !taxonName) return null;
+
+  const levels = store.taxonomy[db].levels || [];
+  const assignments = store.taxonomy[db].assignments || {};
+  const lower = taxonName.toLowerCase();
+
+  for (let levelIdx = 0; levelIdx < levels.length; levelIdx++) {
+    for (const asvId in assignments) {
+      const val = assignments[asvId]?.[levelIdx];
+      if (val && val.toLowerCase() === lower) {
+        return levels[levelIdx];
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Get the hex color for an ASV given a taxonomy level and color map.
  */
 export function getAsvColor(asvId, level, colorMap) {

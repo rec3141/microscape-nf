@@ -58,7 +58,7 @@
   $effect(() => {
     if (!plotDiv || filteredSamples.length === 0) return;
 
-    const colorLevel = getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter);
+    const colorLevel = filters.colorMode === 'group' ? 'group' : getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter);
     const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap : null;
     const re = taxonRe();
     const gf = filters.groupFlags || {};
@@ -185,12 +185,6 @@
   <div class="flex-1 relative">
     <div bind:this={plotDiv} class="absolute inset-0"></div>
   </div>
-
-  {#if store.selectedSample != null}
-    <div class="absolute top-4 right-4 bg-slate-800 text-xs text-slate-400 px-2 py-1 rounded z-10">
-      idx={store.selectedSample} id={store.samples[store.selectedSample]?.id} taxa={topTaxa.length}
-    </div>
-  {/if}
 
   {#if selectedSampleObj}
     <div class="border-t border-slate-800 bg-slate-900/80 p-4">

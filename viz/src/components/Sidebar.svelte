@@ -1,8 +1,25 @@
 <script>
-  import { store, GROUP_HEX, buildTaxColorMap, getEffectiveColorLevel } from '../stores/data.svelte.js';
+  import { store, GROUP_HEX, buildTaxColorMap, getEffectiveColorLevel, findTaxonLevel } from '../stores/data.svelte.js';
   import AutocompleteInput from './AutocompleteInput.svelte';
 
   let { activeTab = 'samples', filters = $bindable({}) } = $props();
+
+  // When taxonFilter changes, auto-navigate to that taxon's level
+  let prevFilter = '';
+  $effect(() => {
+    const f = filters.taxonFilter;
+    if (f && f !== prevFilter && filters.colorMode === 'taxonomy') {
+      const level = findTaxonLevel(f);
+      if (level) {
+        // Push current state and navigate
+        const stack = [...(filters.navStack || [])];
+        stack.push({ level: filters.colorByLevel, filter: prevFilter });
+        filters.navStack = stack;
+        filters.colorByLevel = level;
+      }
+    }
+    prevFilter = f;
+  });
 
   // Collapsible sections
   let sections = $state({
@@ -63,16 +80,14 @@
 
         <label class="block">
           <span class="text-xs text-slate-400">Color by</span>
-          <select bind:value={filters.colorByLevel} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200"
+          <select bind:value={filters.colorMode} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200"
             onchange={() => { filters.navStack = []; filters.taxonFilter = ''; }}>
-            {#each taxLevels as level}
-              <option value={level}>{level}</option>
-            {/each}
+            <option value="taxonomy">Taxonomy</option>
             <option value="group">Group (broad)</option>
           </select>
         </label>
 
-        {#if filters.colorByLevel === 'group'}
+        {#if filters.colorMode === 'group'}
           <fieldset class="space-y-1">
             <legend class="text-xs text-slate-400">Groups</legend>
             {#each Object.keys(filters.groupFlags || {}) as group}
@@ -232,7 +247,8 @@
     {:else if store.selectedAsv != null}
       <p class="text-xs text-slate-400">Selected: {store.asvs[store.selectedAsv]?.id || ''}</p>
     {:else}
-      <p class="text-xs text-slate-500">Click a point to select</p>
+      <p class="text-xs text-slate-500">Click to select, Shift+drag to lasso</p>
+      <p class="text-xs text-slate-500">Shift+double-click to deselect</p>
     {/if}
   </div>
 </aside>

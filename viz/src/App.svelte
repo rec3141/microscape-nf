@@ -14,8 +14,9 @@
   let filters = $state({
     // Taxonomy (shared across all views)
     taxonFilter: '',
-    colorByLevel: 'Domain',
-    navStack: [],  // breadcrumb trail of {level, filter} for drill-down navigation
+    colorMode: 'taxonomy',     // 'taxonomy' or 'group'
+    colorByLevel: 'Domain',    // current taxonomy nav level
+    navStack: [],              // breadcrumb trail for drill-down navigation
     groupFlags: {
       prokaryote: true,
       eukaryote: true,

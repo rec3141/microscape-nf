@@ -60,7 +60,9 @@
   });
 
   // ---- Node styles using shared color-by ----
-  let effectiveColorLevel = $derived(getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter));
+  let effectiveColorLevel = $derived(
+    filters.colorMode === 'group' ? 'group' : getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)
+  );
 
   let taxColorMap = $derived.by(() => {
     if (effectiveColorLevel === 'group') return null;

@@ -36,7 +36,7 @@
   $effect(() => {
     if (!plotDiv || filteredAsvs.length === 0) return;
 
-    const colorLevel = getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter);
+    const colorLevel = filters.colorMode === 'group' ? 'group' : getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter);
     const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap : null;
 
     const colors = filteredAsvs.map(a => {
