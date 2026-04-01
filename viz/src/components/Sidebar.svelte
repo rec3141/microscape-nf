@@ -63,7 +63,8 @@
 
         <label class="block">
           <span class="text-xs text-slate-400">Color by</span>
-          <select bind:value={filters.colorByLevel} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
+          <select bind:value={filters.colorByLevel} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200"
+            onchange={() => { filters.navStack = []; filters.taxonFilter = ''; }}>
             {#each taxLevels as level}
               <option value={level}>{level}</option>
             {/each}
@@ -89,11 +90,24 @@
             <p class="text-[10px] text-slate-500 mb-1">
               {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})
             </p>
-            {#if filters.taxonFilter || effectiveLevel !== filters.colorByLevel}
+            {#if filters.navStack?.length > 0}
+              {@const prev = filters.navStack[filters.navStack.length - 1]}
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-1 text-cyan-400 border-b border-slate-700 mb-1"
                 onclick={() => {
-                  filters.colorByLevel = filters.colorByLevel;
+                  const stack = [...filters.navStack];
+                  const popped = stack.pop();
+                  filters.navStack = stack;
+                  filters.colorByLevel = popped.level;
+                  filters.taxonFilter = popped.filter;
+                }}
+              >
+                &#x25B4; Up to {prev.filter || prev.level}
+              </button>
+            {:else if filters.taxonFilter}
+              <button
+                class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-1 text-cyan-400 border-b border-slate-700 mb-1"
+                onclick={() => {
                   filters.taxonFilter = '';
                 }}
               >
@@ -104,6 +118,10 @@
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
                 onclick={() => {
+                  // Push current state onto nav stack before drilling
+                  const stack = [...(filters.navStack || [])];
+                  stack.push({ level: filters.colorByLevel, filter: filters.taxonFilter });
+                  filters.navStack = stack;
                   if (effectiveLevel !== '_asv') {
                     filters.colorByLevel = effectiveLevel;
                   }

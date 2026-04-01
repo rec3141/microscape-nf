@@ -15,6 +15,7 @@
     // Taxonomy (shared across all views)
     taxonFilter: '',
     colorByLevel: 'Domain',
+    navStack: [],  // breadcrumb trail of {level, filter} for drill-down navigation
     groupFlags: {
       prokaryote: true,
       eukaryote: true,
