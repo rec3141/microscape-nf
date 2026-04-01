@@ -26,7 +26,7 @@
     return s;
   });
 
-  let cMap = $derived(countsBySample());
+  let cMap = $derived.by(() => countsBySample());
 
   let taxonRe = $derived(() => {
     try { return filters.taxonFilter ? new RegExp(filters.taxonFilter, 'i') : null; }
@@ -132,7 +132,7 @@
       title: { text: `${filteredSamples.length} samples`, font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
     };
 
-    const config = { scrollZoom: true, displayModeBar: false, doubleClick: false };
+    const config = { scrollZoom: true, displayModeBar: false, doubleClick: 'reset+autosize' };
 
     if (!hasPlot) {
       Plotly.newPlot(plotDiv, overlayTraces, layout, config);
@@ -185,6 +185,12 @@
   <div class="flex-1 relative">
     <div bind:this={plotDiv} class="absolute inset-0"></div>
   </div>
+
+  {#if store.selectedSample != null}
+    <div class="absolute top-4 right-4 bg-slate-800 text-xs text-slate-400 px-2 py-1 rounded z-10">
+      idx={store.selectedSample} id={store.samples[store.selectedSample]?.id} taxa={topTaxa.length}
+    </div>
+  {/if}
 
   {#if selectedSampleObj}
     <div class="border-t border-slate-800 bg-slate-900/80 p-4">

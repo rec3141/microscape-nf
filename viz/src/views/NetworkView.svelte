@@ -72,7 +72,7 @@
       title: { text: `${filteredAsvs.length} ASVs`, font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
     };
 
-    const config = { scrollZoom: true, displayModeBar: false, doubleClick: false };
+    const config = { scrollZoom: true, displayModeBar: false, doubleClick: 'reset+autosize' };
 
     if (!hasPlot) {
       Plotly.newPlot(plotDiv, [trace], layout, config);
