@@ -63,31 +63,10 @@
     const gf = filters.groupFlags || {};
     const scale = filters.pointScale ?? 1;
 
-    // Trace 0: gray base sample points
-    const baseTrace = {
-      x: filteredSamples.map(s => s.x),
-      y: filteredSamples.map(s => s.y),
-      mode: 'markers',
-      type: 'scattergl',
-      marker: {
-        size: filteredSamples.map(s => Math.max(3, Math.log10((s.total_reads ?? 1) + 1) * 3)),
-        color: 'lightgrey',
-        opacity: 0.5,
-        line: { width: 0.5, color: 'grey' },
-      },
-      text: filteredSamples.map(s =>
-        `${s.id}<br>${(s.total_reads ?? 0).toLocaleString()} reads<br>${s.n_asvs ?? 0} ASVs`
-      ),
-      hoverinfo: 'text',
-      customdata: filteredSamples.map((s, i) => ({ type: 'sample', idx: i })),
-      name: 'samples',
-      showlegend: false,
-    };
-
-    // Overlay traces: one per taxonomic group for legend
+    // Build traces: one per taxonomic group for legend
     const overlayByGroup = {};
 
-    if (filters.showOverlay) {
+    {
       for (const sample of filteredSamples) {
         const sIdx = store.samples.indexOf(sample);
         const entries = cMap.get(sIdx) ?? [];
@@ -165,18 +144,24 @@
     const config = { scrollZoom: true, displayModeBar: false };
 
     if (!hasPlot) {
-      Plotly.newPlot(plotDiv, [baseTrace, ...overlayTraces], layout, config);
+      Plotly.newPlot(plotDiv, [...overlayTraces], layout, config);
       hasPlot = true;
 
       plotDiv.on('plotly_click', (data) => {
-        if (data.points?.[0]?.curveNumber === 0) {
-          const idx = data.points[0].pointNumber;
-          const sIdx = store.samples.indexOf(filteredSamples[idx]);
+        if (data.points?.[0]) {
+          // Find the sample at this x,y
+          const pt = data.points[0];
+          let bestIdx = -1, bestDist = Infinity;
+          filteredSamples.forEach((s, i) => {
+            const d = (s.x - pt.x) ** 2 + (s.y - pt.y) ** 2;
+            if (d < bestDist) { bestDist = d; bestIdx = i; }
+          });
+          const sIdx = bestIdx >= 0 ? store.samples.indexOf(filteredSamples[bestIdx]) : -1;
           store.selectedSample = sIdx >= 0 ? sIdx : null;
         }
       });
     } else {
-      Plotly.react(plotDiv, [baseTrace, ...overlayTraces], layout, config);
+      Plotly.react(plotDiv, [...overlayTraces], layout, config);
     }
   });
 
