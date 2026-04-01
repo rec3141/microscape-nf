@@ -108,10 +108,8 @@ export function buildTaxColorMap(level, taxonFilter = '') {
   const counts = {};
   for (const asvId in assignments) {
     if (filteredAsvIds && !filteredAsvIds.has(asvId)) continue;
-    const val = assignments[asvId]?.[levelIdx];
-    if (val) {
-      counts[val] = (counts[val] || 0) + 1;
-    }
+    const val = assignments[asvId]?.[levelIdx] || 'unclassified';
+    counts[val] = (counts[val] || 0) + 1;
   }
 
   // Rank by count, assign a unique color to every taxon
@@ -211,8 +209,8 @@ export function getAsvColor(asvId, level, colorMap) {
   const levelIdx = levels.indexOf(level);
   if (levelIdx < 0) return '#475569';
 
-  const val = assignments[asvId]?.[levelIdx];
-  return val ? (colorMap[val] || '#475569') : '#475569';
+  const val = assignments[asvId]?.[levelIdx] || 'unclassified';
+  return colorMap[val] || '#475569';
 }
 
 /** Convert hex to regl-scatterplot RGBA [0-1] */
