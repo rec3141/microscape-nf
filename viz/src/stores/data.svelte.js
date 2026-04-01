@@ -296,11 +296,13 @@ export async function loadData() {
 export function countsBySample() {
   const map = new Map();
   const data = store.counts?.data;
-  if (!data) return map;
+  const sampleIds = store.counts?.samples;
+  if (!data || !sampleIds) return map;
   for (const row of data) {
     const [si, ai, count, prop] = row;
-    if (!map.has(si)) map.set(si, []);
-    map.get(si).push({ asv_idx: ai, count, proportion: prop });
+    const sampleId = sampleIds[si];
+    if (!map.has(sampleId)) map.set(sampleId, []);
+    map.get(sampleId).push({ asv_idx: ai, count, proportion: prop });
   }
   return map;
 }

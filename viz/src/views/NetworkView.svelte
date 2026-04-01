@@ -100,6 +100,7 @@
       Plotly.relayout(plotDiv, { dragmode: e.type === 'keydown' ? 'lasso' : 'pan' });
     } else if (e.key === 'Escape' && e.type === 'keydown') {
       store.selectedAsv = null;
+      Plotly.restyle(plotDiv, { selectedpoints: [null] });
     }
   }
 

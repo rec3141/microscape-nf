@@ -35,7 +35,8 @@
 
   let topTaxa = $derived.by(() => {
     if (store.selectedSample == null) return [];
-    const entries = cMap.get(store.selectedSample) ?? [];
+    const sampleId = store.samples[store.selectedSample]?.id;
+    const entries = cMap.get(sampleId) ?? [];
     const total = entries.reduce((s, e) => s + e.count, 0) || 1;
     return entries
       .map(e => ({
@@ -67,8 +68,7 @@
     const allPoints = [];
 
     for (const sample of filteredSamples) {
-      const sIdx = store.samples.indexOf(sample);
-      const entries = cMap.get(sIdx) ?? [];
+      const entries = cMap.get(sample.id) ?? [];
       const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
 
       for (const { asv_idx, count } of entries) {
@@ -166,6 +166,7 @@
       Plotly.relayout(plotDiv, { dragmode: e.type === 'keydown' ? 'lasso' : 'pan' });
     } else if (e.key === 'Escape' && e.type === 'keydown') {
       store.selectedSample = null;
+      Plotly.restyle(plotDiv, { selectedpoints: [null] });
     }
   }
 
