@@ -72,16 +72,17 @@ export function buildTaxColorMap(level, taxonFilter = '') {
   // Filter checks the full taxonomy string (all levels joined)
   let filteredAsvIds = null;
   if (taxonFilter) {
-    try {
-      const re = new RegExp(taxonFilter, 'i');
-      filteredAsvIds = new Set();
-      for (const asvId in assignments) {
-        const fullTax = assignments[asvId].filter(Boolean).join(';');
-        if (re.test(fullTax) || re.test(asvId)) {
-          filteredAsvIds.add(asvId);
-        }
-      }
-    } catch {}
+    filteredAsvIds = new Set();
+    let re;
+    try { re = new RegExp(taxonFilter, 'i'); } catch { re = null; }
+    const lower = taxonFilter.toLowerCase();
+    for (const asvId in assignments) {
+      const fullTax = assignments[asvId].filter(Boolean).join(';');
+      const match = re
+        ? (re.test(fullTax) || re.test(asvId))
+        : (fullTax.toLowerCase().includes(lower) || asvId.toLowerCase().includes(lower));
+      if (match) filteredAsvIds.add(asvId);
+    }
   }
 
   // Special case: color by individual ASV ID
@@ -150,16 +151,23 @@ export function getEffectiveColorLevel(colorByLevel, taxonFilter) {
     if (val) taxaAtLevel.add(val);
   }
 
-  // If filter exactly matches (or regex matches exactly one) taxon at this level,
-  // drill down to the next level
+  // If filter exactly matches one taxon at this level, drill down
   let matchCount = 0;
-  try {
-    const re = new RegExp(`^${taxonFilter}$`, 'i');
-    for (const t of taxaAtLevel) {
-      if (re.test(t)) matchCount++;
+  // First try exact string match (handles special chars like parentheses)
+  for (const t of taxaAtLevel) {
+    if (t.toLowerCase() === taxonFilter.toLowerCase()) matchCount++;
+  }
+  // If no exact match, try as regex
+  if (matchCount === 0) {
+    try {
+      const escaped = taxonFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`^${escaped}$`, 'i');
+      for (const t of taxaAtLevel) {
+        if (re.test(t)) matchCount++;
+      }
+    } catch {
+      return colorByLevel;
     }
-  } catch {
-    return colorByLevel;
   }
 
   if (matchCount === 1) {
