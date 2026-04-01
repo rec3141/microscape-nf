@@ -185,9 +185,12 @@ workflow {
             }
     }
 
-    // 4a. Auto-detect truncation lengths (or use explicit params)
+    // 4a. Auto-detect truncation lengths from trimmed reads (or use explicit params)
     if (params.auto_trim && params.truncLen_fwd == 0 && params.truncLen_rev == 0) {
-        AUTO_TRIM(file(params.input))
+        // Collect trimmed R1 files for quality profiling
+        ch_trimmed_r1 = ch_trimmed.map { meta, r1, r2 -> r1 }.collect()
+        ch_trimmed_r2 = ch_trimmed.map { meta, r1, r2 -> r2 }.collect()
+        AUTO_TRIM(ch_trimmed_r1.mix(ch_trimmed_r2).collect())
         ch_trunc_fwd = AUTO_TRIM.out.trunc_fwd
         ch_trunc_rev = AUTO_TRIM.out.trunc_rev
     } else {

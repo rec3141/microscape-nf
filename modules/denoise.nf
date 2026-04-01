@@ -28,7 +28,7 @@ process AUTO_TRIM {
     publishDir "${params.outdir}/quality_check", mode: 'copy'
 
     input:
-    path(input_dir)
+    path(trimmed_reads)
 
     output:
     path("auto_trim.tsv"), emit: params_tsv
@@ -37,7 +37,7 @@ process AUTO_TRIM {
 
     script:
     """
-    microscape auto-trim "${input_dir}" \
+    microscape auto-trim "." \
         --min-quality ${params.auto_trim_min_quality} \
         --output auto_trim.tsv \
         --verbose
