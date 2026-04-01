@@ -159,7 +159,7 @@ workflow {
             }
     } else {
         // Pair up R1/R2 files by sample prefix
-        ch_demuxed = Channel.fromFilePairs("${params.input}/*_R{1,2}*.fastq.gz", flat: true)
+        ch_demuxed = Channel.fromFilePairs("${params.input}/*_{R1,R2,1,2}*.fastq.gz", flat: true)
             .map { sample_id, r1, r2 ->
                 [[id: sample_id], r1, r2]
             }

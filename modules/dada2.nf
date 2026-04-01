@@ -54,7 +54,7 @@ process DADA2_FILTER_TRIM {
 process DADA2_LEARN_ERRORS {
     tag "${meta.id}"
     label 'process_high'
-    conda dadaEngine() == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
+    conda ((params.dada_engine ?: params.lang) == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml")
     publishDir "${params.outdir}/error_models", mode: 'copy', enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/error_models" : null
 
@@ -81,7 +81,7 @@ process DADA2_LEARN_ERRORS {
 process DADA2_DENOISE {
     tag "${meta.id}"
     label 'process_high'
-    conda dadaEngine() == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
+    conda ((params.dada_engine ?: params.lang) == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml")
     publishDir "${params.outdir}/seqtabs", mode: 'copy', enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/seqtabs" : null
 
