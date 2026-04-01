@@ -85,6 +85,10 @@
           store.selectedAsv = oi >= 0 ? oi : null;
         }
       });
+
+      plotDiv.on('plotly_doubleclick', () => {
+        store.selectedAsv = null;
+      });
     } else {
       const curLayout = plotDiv.layout;
       if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;

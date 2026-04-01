@@ -140,7 +140,6 @@
 
       plotDiv.on('plotly_click', (data) => {
         if (data.points?.[0]) {
-          // Find the sample at this x,y
           const pt = data.points[0];
           let bestIdx = -1, bestDist = Infinity;
           filteredSamples.forEach((s, i) => {
@@ -150,6 +149,10 @@
           const sIdx = bestIdx >= 0 ? store.samples.indexOf(filteredSamples[bestIdx]) : -1;
           store.selectedSample = sIdx >= 0 ? sIdx : null;
         }
+      });
+
+      plotDiv.on('plotly_doubleclick', () => {
+        store.selectedSample = null;
       });
     } else {
       // Preserve user's current zoom
