@@ -1,20 +1,16 @@
 <script>
   import { onMount } from 'svelte';
-  import createScatterplot from 'regl-scatterplot';
+  import Plotly from 'plotly.js-dist-min';
   import {
     store, countsBySample,
-    GROUP_COLORS, GROUP_HEX,
+    GROUP_HEX,
     buildTaxColorMap, getAsvColor,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
 
-  // ── Canvas + scatterplot ──────────────────────────────────────────────────
-  let canvasContainer = $state(null);
-  let canvas = $state(null);
-  let scatterplot = $state(null);
-  let tooltip = $state({ show: false, x: 0, y: 0, text: '' });
-  let hasZoomed = false;
+  let plotDiv;
+  let hasPlot = false;
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -37,41 +33,6 @@
     catch { return null; }
   });
 
-  // Overlay: per-sample ASV entries placed at sample position, sorted large-to-small
-  let overlayEntries = $derived.by(() => {
-    if (!filters.showOverlay || filteredSamples.length === 0 || store.asvs.length === 0) return [];
-
-    const re = taxonRe();
-    const gf = filters.groupFlags || {};
-    const entries = [];
-
-    for (const sample of filteredSamples) {
-      const sIdx = store.samples.indexOf(sample);
-      const counts = cMap.get(sIdx) ?? [];
-      const totalCount = counts.reduce((s, e) => s + e.count, 0) || 1;
-
-      for (const { asv_idx, count } of counts) {
-        const asv = store.asvs[asv_idx];
-        if (!asv) continue;
-
-        const group = asv.group ?? 'prokaryote';
-        if (gf[group] === false) continue;
-        if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
-
-        entries.push({
-          x: sample.x,
-          y: sample.y,
-          proportion: count / totalCount,
-          sampleIdx: sIdx,
-          asvIdx: asv_idx,
-        });
-      }
-    }
-    // Sort largest first so they draw behind smaller ones
-    entries.sort((a, b) => b.proportion - a.proportion);
-    return entries;
-  });
-
   let topTaxa = $derived.by(() => {
     if (store.selectedSample == null) return [];
     const entries = cMap.get(store.selectedSample) ?? [];
@@ -91,166 +52,144 @@
     store.selectedSample != null ? store.samples[store.selectedSample] : null
   );
 
-  // ── Scatterplot lifecycle ─────────────────────────────────────────────────
-  onMount(() => {
-    return () => {
-      if (scatterplot) scatterplot.destroy();
-    };
-  });
+  // ── Build plotly traces ───────────────────────────────────────────────────
 
   $effect(() => {
-    if (canvas && !scatterplot) {
-      const rect = canvasContainer.getBoundingClientRect();
-      const sp = createScatterplot({
-        canvas,
-        width: rect.width,
-        height: rect.height,
-        pointSize: 200,
-        opacity: 0.8,
-        lassoOnLongPress: true,
-        backgroundColor: [0.02, 0.06, 0.1, 1],
-      });
+    if (!plotDiv || filteredSamples.length === 0) return;
 
-      sp.subscribe('pointover', (idx) => {
-        let s, asvInfo;
-        if (idx < numBasePts) {
-          s = filteredSamples[idx];
-        } else {
-          const entry = overlayEntries[idx - numBasePts];
-          if (entry) {
-            s = filteredSamples.find((_, i) => store.samples.indexOf(filteredSamples[i]) === entry.sampleIdx)
-              || store.samples[entry.sampleIdx];
-            asvInfo = store.asvs[entry.asvIdx];
-          }
-        }
-        if (s) {
-          const text = asvInfo
-            ? `${s.id} | ${asvInfo.id} ${asvInfo.taxonomy ?? ''}`
-            : `${s.id ?? 'Sample'} | ${(s.total_reads ?? 0).toLocaleString()} reads`;
-          tooltip = { show: true, x: 0, y: 0, text };
-        }
-      });
+    const colorLevel = filters.colorByLevel;
+    const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel).colorMap : null;
+    const re = taxonRe();
+    const gf = filters.groupFlags || {};
+    const scale = filters.pointScale ?? 1;
 
-      sp.subscribe('pointout', () => {
-        tooltip = { show: false, x: 0, y: 0, text: '' };
-      });
+    // Trace 0: gray base sample points
+    const baseTrace = {
+      x: filteredSamples.map(s => s.x),
+      y: filteredSamples.map(s => s.y),
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {
+        size: filteredSamples.map(s => Math.max(3, Math.log10((s.total_reads ?? 1) + 1) * 3)),
+        color: 'lightgrey',
+        opacity: 0.5,
+        line: { width: 0.5, color: 'grey' },
+      },
+      text: filteredSamples.map(s =>
+        `${s.id}<br>${(s.total_reads ?? 0).toLocaleString()} reads<br>${s.n_asvs ?? 0} ASVs`
+      ),
+      hoverinfo: 'text',
+      customdata: filteredSamples.map((s, i) => ({ type: 'sample', idx: i })),
+      name: 'samples',
+      showlegend: false,
+    };
 
-      sp.subscribe('select', ({ points: indices }) => {
-        if (indices.length > 0) {
-          const idx = indices[0];
-          let sIdx;
-          if (idx < numBasePts) {
-            sIdx = store.samples.indexOf(filteredSamples[idx]);
+    // Overlay traces: one per taxonomic group for legend
+    const overlayByGroup = {};
+
+    if (filters.showOverlay) {
+      for (const sample of filteredSamples) {
+        const sIdx = store.samples.indexOf(sample);
+        const entries = cMap.get(sIdx) ?? [];
+        const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
+
+        for (const { asv_idx, count } of entries) {
+          const asv = store.asvs[asv_idx];
+          if (!asv) continue;
+
+          const group = asv.group ?? 'prokaryote';
+          if (gf[group] === false) continue;
+          if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
+
+          const proportion = count / totalCount;
+          let color;
+          let groupKey;
+          if (cmap) {
+            color = getAsvColor(asv.id, colorLevel, cmap);
+            // Group by the taxon name for this level
+            const db = Object.keys(store.taxonomy)[0];
+            const levels = store.taxonomy[db]?.levels || [];
+            const levelIdx = levels.indexOf(colorLevel);
+            const taxName = store.taxonomy[db]?.assignments?.[asv.id]?.[levelIdx] || 'unclassified';
+            groupKey = taxName;
           } else {
-            const entry = overlayEntries[idx - numBasePts];
-            sIdx = entry ? entry.sampleIdx : -1;
+            color = GROUP_HEX[group] ?? GROUP_HEX.unknown;
+            groupKey = group;
           }
+
+          if (!overlayByGroup[groupKey]) {
+            overlayByGroup[groupKey] = {
+              x: [], y: [], sizes: [], texts: [], color,
+            };
+          }
+          const g = overlayByGroup[groupKey];
+          g.x.push(sample.x);
+          g.y.push(sample.y);
+          g.sizes.push(Math.max(2, Math.sqrt(Math.sqrt(proportion)) * 15 * scale));
+          g.texts.push(`${asv.id}<br>${asv.taxonomy ?? ''}<br>${(proportion * 1000).toFixed(1)} ‰`);
+        }
+      }
+    }
+
+    const overlayTraces = Object.entries(overlayByGroup).map(([name, g]) => ({
+      x: g.x,
+      y: g.y,
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {
+        size: g.sizes,
+        color: g.color,
+        opacity: 0.6,
+        line: { width: 0 },
+      },
+      text: g.texts,
+      hoverinfo: 'text',
+      name,
+    }));
+
+    const layout = {
+      dragmode: 'pan',
+      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false },
+      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x' },
+      plot_bgcolor: 'rgba(2, 6, 15, 1)',
+      paper_bgcolor: 'rgba(2, 6, 15, 1)',
+      font: { color: '#94a3b8' },
+      legend: {
+        bgcolor: 'rgba(15, 23, 42, 0.8)',
+        font: { size: 10 },
+      },
+      margin: { l: 20, r: 20, t: 10, b: 20 },
+      title: { text: `${filteredSamples.length} samples`, font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
+    };
+
+    const config = { scrollZoom: true, displayModeBar: false };
+
+    if (!hasPlot) {
+      Plotly.newPlot(plotDiv, [baseTrace, ...overlayTraces], layout, config);
+      hasPlot = true;
+
+      plotDiv.on('plotly_click', (data) => {
+        if (data.points?.[0]?.curveNumber === 0) {
+          const idx = data.points[0].pointNumber;
+          const sIdx = store.samples.indexOf(filteredSamples[idx]);
           store.selectedSample = sIdx >= 0 ? sIdx : null;
         }
       });
-
-      scatterplot = sp;
+    } else {
+      Plotly.react(plotDiv, [baseTrace, ...overlayTraces], layout, config);
     }
   });
 
-  // Track how many base points for click routing
-  let numBasePts = 0;
-
-  $effect(() => {
-    if (!scatterplot || filteredSamples.length === 0) return;
-
-    // Read colorByLevel to ensure reactivity
-    const colorLevel = filters.colorByLevel;
-    const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel).colorMap : null;
-
-    const xArr = [];
-    const yArr = [];
-    const wArr = [];
-    const hexArr = [];
-
-    const scale = filters.pointScale ?? 1;
-
-    // Layer 1: gray base points — all same w=0.3 (small)
-    for (const s of filteredSamples) {
-      xArr.push(s.x);
-      yArr.push(s.y);
-      wArr.push(0.3);
-      hexArr.push('#445566');
-    }
-
-    numBasePts = filteredSamples.length;
-
-    // Layer 2: colored overlay — proportion^0.25 as w (0 to 1)
-    for (const entry of overlayEntries) {
-      xArr.push(entry.x);
-      yArr.push(entry.y);
-      wArr.push(Math.pow(entry.proportion, 0.25));
-
-      const asv = store.asvs[entry.asvIdx];
-      if (cmap && asv) {
-        hexArr.push(getAsvColor(asv.id, colorLevel, cmap));
-      } else if (asv) {
-        hexArr.push(GROUP_HEX[asv.group ?? 'prokaryote'] ?? GROUP_HEX.unknown);
-      } else {
-        hexArr.push('#999999');
-      }
-    }
-
-    // Build palette + z values normalized to 0-1
-    const uniqueColors = [...new Set(hexArr)];
-    const colorIdx = {};
-    const nColors = Math.max(uniqueColors.length - 1, 1);
-    uniqueColors.forEach((c, i) => { colorIdx[c] = i / nColors; });
-    const zArr = hexArr.map(c => colorIdx[c]);
-
-    const minPx = 200 * scale;
-    const maxPx = 4000 * scale;
-
-    scatterplot.set({
-      pointColor: uniqueColors, colorBy: 'valueZ',
-      pointSize: [minPx, maxPx], sizeBy: 'valueW',
-      opacity: 1.0,
-    });
-    scatterplot.draw({
-      x: xArr,
-      y: yArr,
-      z: zArr,
-      w: wArr,
-    }).then(() => {
-      if (!hasZoomed) {
-        scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
-          padding: 0.2,
-          transition: true,
-          transitionDuration: 500,
-        });
-        hasZoomed = true;
-      }
-    });
+  onMount(() => {
+    return () => {
+      if (plotDiv && hasPlot) Plotly.purge(plotDiv);
+    };
   });
-
-  function handleResize() {
-    if (scatterplot && canvasContainer) {
-      const rect = canvasContainer.getBoundingClientRect();
-      scatterplot.set({ width: rect.width, height: rect.height });
-    }
-  }
 </script>
 
-<svelte:window onresize={handleResize} />
-
 <div class="flex h-full flex-col">
-  <div class="relative flex-1" bind:this={canvasContainer}>
-    <canvas bind:this={canvas} class="absolute inset-0 h-full w-full"></canvas>
-
-    {#if tooltip.show}
-      <div class="pointer-events-none absolute left-4 top-4 rounded bg-slate-800/90 px-3 py-1.5 text-xs text-slate-200 shadow-lg">
-        {tooltip.text}
-      </div>
-    {/if}
-
-    <div class="absolute bottom-4 left-4 text-xs text-slate-500">
-      {filteredSamples.length} / {store.samples.length} samples
-    </div>
+  <div class="flex-1 relative">
+    <div bind:this={plotDiv} class="absolute inset-0"></div>
   </div>
 
   {#if selectedSampleObj}

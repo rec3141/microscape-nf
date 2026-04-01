@@ -1,19 +1,16 @@
 <script>
   import { onMount } from 'svelte';
-  import createScatterplot from 'regl-scatterplot';
+  import Plotly from 'plotly.js-dist-min';
   import {
-    store, countsByAsv,
-    GROUP_COLORS, GROUP_HEX,
-    buildTaxColorMap, getAsvColor, hexToRegl,
+    store,
+    GROUP_HEX,
+    buildTaxColorMap, getAsvColor,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
 
-  let canvasContainer = $state(null);
-  let canvas = $state(null);
-  let scatterplot = $state(null);
-  let tooltip = $state({ show: false, x: 0, y: 0, text: '' });
-  let hasZoomed = false;
+  let plotDiv;
+  let hasPlot = false;
 
   let taxonRe = $derived(() => {
     try { return filters.taxonFilter ? new RegExp(filters.taxonFilter, 'i') : null; }
@@ -32,121 +29,77 @@
     });
   });
 
-  let idxMap = $derived.by(() => {
-    const m = new Map();
-    filteredAsvs.forEach((a, fi) => {
-      const oi = store.asvs.indexOf(a);
-      m.set(oi, fi);
-    });
-    return m;
-  });
-
-  let filteredEdges = $derived.by(() => {
-    if (!filters.showEdges) return [];
-    return (store.network?.edges ?? store.network ?? []).filter(e => {
-      if (Math.abs(e.weight ?? 0) < (filters.corrThreshold || 0.3)) return false;
-      return idxMap.has(e.source) && idxMap.has(e.target);
-    });
-  });
-
   let selectedAsvObj = $derived(
     store.selectedAsv != null ? store.asvs[store.selectedAsv] : null
   );
 
-  onMount(() => {
-    return () => { if (scatterplot) scatterplot.destroy(); };
-  });
-
   $effect(() => {
-    if (canvas && !scatterplot) {
-      const rect = canvasContainer.getBoundingClientRect();
-      const sp = createScatterplot({
-        canvas,
-        width: rect.width,
-        height: rect.height,
-        pointSize: 200,
-        opacity: 0.85,
-        lassoOnLongPress: true,
-        backgroundColor: [0.02, 0.06, 0.1, 1],
-      });
+    if (!plotDiv || filteredAsvs.length === 0) return;
 
-      sp.subscribe('pointover', (idx) => {
-        const a = filteredAsvs[idx];
-        if (a) {
-          tooltip = { show: true, x: 0, y: 0,
-            text: `${a.id ?? 'ASV'} | ${a.taxonomy ?? ''} | ${(a.total_reads ?? 0).toLocaleString()} reads`,
-          };
-        }
-      });
-      sp.subscribe('pointout', () => { tooltip = { show: false, x: 0, y: 0, text: '' }; });
-      sp.subscribe('select', ({ points: indices }) => {
-        if (indices.length > 0) {
-          const oi = store.asvs.indexOf(filteredAsvs[indices[0]]);
-          store.selectedAsv = oi >= 0 ? oi : null;
-        }
-      });
-      scatterplot = sp;
-    }
-  });
+    const colorLevel = filters.colorByLevel;
+    const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel).colorMap : null;
 
-  $effect(() => {
-    if (!scatterplot || filteredAsvs.length === 0) return;
-    const xArr = filteredAsvs.map(a => a.x ?? 0);
-    const yArr = filteredAsvs.map(a => a.y ?? 0);
-    const sizes = filteredAsvs.map(a => Math.max(25, Math.log2((a.total_reads ?? 1) + 1) * 12));
-    const cmap = filters.colorByLevel !== 'group' ? buildTaxColorMap(filters.colorByLevel).colorMap : null;
-    const perPointHex = filteredAsvs.map(a => {
-      if (cmap) return getAsvColor(a.id, filters.colorByLevel, cmap);
+    const colors = filteredAsvs.map(a => {
+      if (cmap) return getAsvColor(a.id, colorLevel, cmap);
       return GROUP_HEX[a.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
     });
 
-    // Build palette + index mapping for regl-scatterplot
-    const uniqueColors = [...new Set(perPointHex)];
-    const colorIdx = {};
-    const nColors = Math.max(uniqueColors.length - 1, 1);
-    uniqueColors.forEach((c, i) => { colorIdx[c] = i / nColors; });
-    const zArr = perPointHex.map(c => colorIdx[c]);
+    const trace = {
+      x: filteredAsvs.map(a => a.x ?? 0),
+      y: filteredAsvs.map(a => a.y ?? 0),
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {
+        size: filteredAsvs.map(a => Math.max(3, Math.log2((a.total_reads ?? 1) + 1) * 1.5)),
+        color: colors,
+        opacity: 0.7,
+      },
+      text: filteredAsvs.map(a =>
+        `${a.id}<br>${a.taxonomy ?? ''}<br>${(a.total_reads ?? 0).toLocaleString()} reads<br>${a.prevalence ?? 0} samples`
+      ),
+      hoverinfo: 'text',
+      showlegend: false,
+    };
 
-    const maxSize = Math.max(...sizes, 1);
-    const wArr = sizes.map(s => s / maxSize);
+    const layout = {
+      dragmode: 'pan',
+      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false },
+      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x' },
+      plot_bgcolor: 'rgba(2, 6, 15, 1)',
+      paper_bgcolor: 'rgba(2, 6, 15, 1)',
+      font: { color: '#94a3b8' },
+      margin: { l: 20, r: 20, t: 10, b: 20 },
+      title: { text: `${filteredAsvs.length} ASVs`, font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
+    };
 
-    scatterplot.set({
-      pointColor: uniqueColors, colorBy: 'valueZ',
-      pointSize: [200, 4000], sizeBy: 'valueW',
-    });
-    scatterplot.draw({ x: xArr, y: yArr, z: zArr, w: wArr }).then(() => {
-      if (!hasZoomed) {
-        scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
-          padding: 0.2, transition: true, transitionDuration: 500,
-        });
-        hasZoomed = true;
-      }
-    });
+    const config = { scrollZoom: true, displayModeBar: false };
+
+    if (!hasPlot) {
+      Plotly.newPlot(plotDiv, [trace], layout, config);
+      hasPlot = true;
+
+      plotDiv.on('plotly_click', (data) => {
+        if (data.points?.[0]) {
+          const idx = data.points[0].pointNumber;
+          const oi = store.asvs.indexOf(filteredAsvs[idx]);
+          store.selectedAsv = oi >= 0 ? oi : null;
+        }
+      });
+    } else {
+      Plotly.react(plotDiv, [trace], layout, config);
+    }
   });
 
-  function handleResize() {
-    if (scatterplot && canvasContainer) {
-      const rect = canvasContainer.getBoundingClientRect();
-      scatterplot.set({ width: rect.width, height: rect.height });
-    }
-  }
+  onMount(() => {
+    return () => {
+      if (plotDiv && hasPlot) Plotly.purge(plotDiv);
+    };
+  });
 </script>
 
-<svelte:window onresize={handleResize} />
-
 <div class="flex h-full flex-col">
-  <div class="relative flex-1" bind:this={canvasContainer}>
-    <canvas bind:this={canvas} class="absolute inset-0 h-full w-full"></canvas>
-
-    {#if tooltip.show}
-      <div class="pointer-events-none absolute left-4 top-4 rounded bg-slate-800/90 px-3 py-1.5 text-xs text-slate-200 shadow-lg">
-        {tooltip.text}
-      </div>
-    {/if}
-
-    <div class="absolute bottom-4 left-4 text-xs text-slate-500">
-      {filteredAsvs.length} / {store.asvs.length} ASVs | {filteredEdges.length} edges
-    </div>
+  <div class="flex-1 relative">
+    <div bind:this={plotDiv} class="absolute inset-0"></div>
   </div>
 
   {#if selectedAsvObj}
