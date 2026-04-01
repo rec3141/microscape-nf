@@ -27,7 +27,7 @@
 
   /** Filtered store.samples by min read depth */
   let filteredSamples = $derived(
-    store.samples.filter(s => (s.reads ?? 0) >= minReads)
+    store.samples.filter(s => (s.total_reads ?? 0) >= minReads)
   );
 
   /** Precompute store.counts-by-sample map */
@@ -121,7 +121,7 @@
           tooltip = {
             show: true,
             x: 0, y: 0,
-            text: `${s.id ?? 'Sample ' + idx} | ${(s.reads ?? 0).toLocaleString()} reads`,
+            text: `${s.id ?? 'Sample ' + idx} | ${(s.total_reads ?? 0).toLocaleString()} reads`,
           };
         }
       });
@@ -147,7 +147,7 @@
 
     const xArr = filteredSamples.map(s => s.x);
     const yArr = filteredSamples.map(s => s.y);
-    const sizes = filteredSamples.map(s => Math.max(2, Math.log2((s.reads ?? 1) + 1)));
+    const sizes = filteredSamples.map(s => Math.max(2, Math.log2((s.total_reads ?? 1) + 1)));
     const colors = filteredSamples.map(() => [0.5, 0.55, 0.65, 0.5]);
 
     scatterplot.draw({
