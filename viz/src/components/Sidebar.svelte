@@ -86,15 +86,37 @@
           {@const effectiveLevel = getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)}
           {@const taxColors = buildTaxColorMap(effectiveLevel)}
           <div class="space-y-0.5 max-h-48 overflow-y-auto">
-            {#if effectiveLevel !== filters.colorByLevel}
-              <p class="text-[10px] text-cyan-400 mb-1">Coloring by {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})</p>
+            {#if effectiveLevel !== filters.colorByLevel || filters.taxonFilter}
+              <div class="flex items-center gap-1 mb-1">
+                <button
+                  class="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold"
+                  onclick={() => {
+                    // Go up: clear filter and step colorByLevel up one
+                    const levels = taxLevels;
+                    const idx = levels.indexOf(filters.colorByLevel);
+                    if (idx > 0) {
+                      filters.colorByLevel = levels[idx - 1];
+                    }
+                    filters.taxonFilter = '';
+                  }}
+                  title="Go up one level"
+                >&#x25B4;</button>
+                <p class="text-[10px] text-cyan-400">
+                  {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})
+                </p>
+              </div>
             {:else}
               <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
             {/if}
             {#each taxColors.ranked as item}
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"
-                onclick={() => filters.taxonFilter = item.name}
+                onclick={() => {
+                  if (effectiveLevel !== '_asv') {
+                    filters.colorByLevel = effectiveLevel;
+                  }
+                  filters.taxonFilter = item.name;
+                }}
               >
                 <span class="inline-block h-2 w-2 rounded-full shrink-0" style="background:{item.color}"></span>
                 <span class="truncate">{item.name}</span>
