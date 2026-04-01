@@ -65,6 +65,20 @@ export function buildTaxColorMap(level) {
   const db = Object.keys(store.taxonomy)[0];
   if (!db || !store.taxonomy[db]) return { colorMap: {}, ranked: [] };
 
+  // Special case: color by individual ASV ID
+  if (level === '_asv') {
+    const asvIds = store.asvs.map(a => a.id).filter(Boolean);
+    const palette = generatePalette(asvIds.length);
+    const colorMap = {};
+    const ranked = asvIds.map((id, i) => {
+      colorMap[id] = palette[i];
+      const asv = store.asvs.find(a => a.id === id);
+      return { name: id, count: asv?.total_reads ?? 0, color: palette[i] };
+    });
+    ranked.sort((a, b) => b.count - a.count);
+    return { colorMap, ranked };
+  }
+
   const levels = store.taxonomy[db].levels || [];
   const assignments = store.taxonomy[db].assignments || {};
   const levelIdx = levels.indexOf(level);
@@ -128,8 +142,12 @@ export function getEffectiveColorLevel(colorByLevel, taxonFilter) {
     return colorByLevel;
   }
 
-  if (matchCount === 1 && levelIdx < levels.length - 1) {
-    return levels[levelIdx + 1];
+  if (matchCount === 1) {
+    if (levelIdx < levels.length - 1) {
+      return levels[levelIdx + 1];
+    }
+    // At the deepest level (e.g. Genus) — color by individual ASV
+    return '_asv';
   }
 
   return colorByLevel;
@@ -139,6 +157,10 @@ export function getEffectiveColorLevel(colorByLevel, taxonFilter) {
  * Get the hex color for an ASV given a taxonomy level and color map.
  */
 export function getAsvColor(asvId, level, colorMap) {
+  if (level === '_asv') {
+    return colorMap[asvId] || '#475569';
+  }
+
   const db = Object.keys(store.taxonomy)[0];
   if (!db || !store.taxonomy[db]) return '#475569';
 

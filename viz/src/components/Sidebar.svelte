@@ -87,7 +87,7 @@
           {@const taxColors = buildTaxColorMap(effectiveLevel)}
           <div class="space-y-0.5 max-h-48 overflow-y-auto">
             {#if effectiveLevel !== filters.colorByLevel}
-              <p class="text-[10px] text-cyan-400 mb-1">Coloring by {effectiveLevel} ({taxColors.ranked.length})</p>
+              <p class="text-[10px] text-cyan-400 mb-1">Coloring by {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})</p>
             {:else}
               <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
             {/if}
