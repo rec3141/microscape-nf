@@ -34,29 +34,16 @@ process FILTER_TRIM {
     script:
     if (params.lang == 'python')
     """
-    python3 -c "
-import os, pickle
-from papa2.filter import fastq_paired_filter
-
-sid = '${meta.id}'
-r1_out, r2_out = f'{sid}_R1.filt.fastq.gz', f'{sid}_R2.filt.fastq.gz'
-reads_in, reads_out = fastq_paired_filter(
-    '${r1}', r1_out, '${r2}', r2_out,
-    max_ee=(${params.maxEE}, ${params.maxEE}),
-    trunc_q=(${params.truncQ}, ${params.truncQ}),
-    max_n=(${params.maxN}, ${params.maxN}),
-    trunc_len=(${params.truncLen_fwd}, ${params.truncLen_rev}),
-    compress=True,
-)
-if reads_out == 0:
-    os.remove(r1_out); os.remove(r2_out)
-    open(r1_out, 'w').close(); open(r2_out, 'w').close()
-pct = round(reads_out / max(reads_in, 1) * 100, 1)
-with open(f'{sid}_filt_stats.tsv', 'w') as f:
-    f.write('sample\treads_in\treads_out\tpct_retained\n')
-    f.write(f'{sid}\t{reads_in}\t{reads_out}\t{pct}\n')
-print(f'[INFO] {sid}: {reads_out}/{reads_in} ({pct}%) passed filter')
-"
+    papa2 filter-trim \
+        "${r1}" "${meta.id}_R1.filt.fastq.gz" \
+        "${r2}" "${meta.id}_R2.filt.fastq.gz" \
+        --max-ee ${params.maxEE} \
+        --trunc-q ${params.truncQ} \
+        --max-n ${params.maxN} \
+        --trunc-len-fwd ${params.truncLen_fwd} \
+        --trunc-len-rev ${params.truncLen_rev} \
+        --stats "${meta.id}_filt_stats.tsv" \
+        --sample-id "${meta.id}"
     """
     else
     """
