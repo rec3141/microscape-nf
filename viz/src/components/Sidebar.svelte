@@ -130,6 +130,11 @@
             <input type="checkbox" bind:checked={filters.showOverlay} class="accent-blue-500" />
             Show taxa overlay
           </label>
+
+          <label class="block">
+            <span class="text-xs text-slate-400">Point scale: {(filters.pointScale ?? 1).toFixed(1)}x</span>
+            <input type="range" min="0.1" max="5" step="0.1" bind:value={filters.pointScale} class="mt-1 w-full accent-blue-500" />
+          </label>
         </div>
       {/if}
     </div>

@@ -180,7 +180,7 @@
     for (const entry of overlayEntries) {
       xArr.push(entry.x);
       yArr.push(entry.y);
-      sizes.push(Math.max(3, Math.pow(entry.proportion, 0.25) * 50));
+      sizes.push(Math.max(3, Math.pow(entry.proportion, 0.25) * 50 * (filters.pointScale ?? 1)));
 
       const asv = store.asvs[entry.asvIdx];
       if (cmap && asv) {
@@ -200,12 +200,22 @@
     uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
     const zArr = hexArr.map(c => colorIdx[c]);
 
-    scatterplot.set({ pointColor: uniqueColors, colorBy: 'valueZ', opacity: 1.0 });
+    // Build size palette + w indices (categorical: each unique size is a bin)
+    const uniqueSizes = [...new Set(sizes)].sort((a, b) => a - b);
+    const sizeIdx = {};
+    uniqueSizes.forEach((s, i) => { sizeIdx[s] = i; });
+    const wArr = sizes.map(s => sizeIdx[s]);
+
+    scatterplot.set({
+      pointColor: uniqueColors, colorBy: 'valueZ',
+      pointSize: uniqueSizes, sizeBy: 'valueW',
+      opacity: 1.0,
+    });
     scatterplot.draw({
       x: xArr,
       y: yArr,
       z: zArr,
-      size: sizes,
+      w: wArr,
     }).then(() => {
       if (!hasZoomed) {
         scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {

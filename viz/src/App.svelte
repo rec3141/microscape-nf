@@ -26,6 +26,7 @@
     minReads: 0,
     sampleFilter: '',
     showOverlay: true,
+    pointScale: 1.0,
     // Network
     minPrevalence: 0,
     corrThreshold: 0.3,

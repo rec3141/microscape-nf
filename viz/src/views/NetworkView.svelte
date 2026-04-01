@@ -106,8 +106,16 @@
     uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
     const zArr = perPointHex.map(c => colorIdx[c]);
 
-    scatterplot.set({ pointColor: uniqueColors, colorBy: 'valueZ' });
-    scatterplot.draw({ x: xArr, y: yArr, z: zArr, size: sizes }).then(() => {
+    const uniqueSizes = [...new Set(sizes)].sort((a, b) => a - b);
+    const sizeIdx = {};
+    uniqueSizes.forEach((s, i) => { sizeIdx[s] = i; });
+    const wArr = sizes.map(s => sizeIdx[s]);
+
+    scatterplot.set({
+      pointColor: uniqueColors, colorBy: 'valueZ',
+      pointSize: uniqueSizes, sizeBy: 'valueW',
+    });
+    scatterplot.draw({ x: xArr, y: yArr, z: zArr, w: wArr }).then(() => {
       if (!hasZoomed) {
         scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
           padding: 0.2, transition: true, transitionDuration: 500,
