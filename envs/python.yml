@@ -4,7 +4,6 @@ channels:
   - bioconda
 dependencies:
   - python >=3.10
-  - microscape
   - cutadapt
   - mafft
   - biopython
@@ -14,3 +13,4 @@ dependencies:
   - pip
   - pip:
     - git+https://github.com/rec3141/papa2.git
+    - git+https://github.com/rec3141/microscape.git
