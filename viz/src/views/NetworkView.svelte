@@ -103,7 +103,8 @@
     // Build palette + index mapping for regl-scatterplot
     const uniqueColors = [...new Set(perPointHex)];
     const colorIdx = {};
-    uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
+    const nColors = Math.max(uniqueColors.length - 1, 1);
+    uniqueColors.forEach((c, i) => { colorIdx[c] = i / nColors; });
     const zArr = perPointHex.map(c => colorIdx[c]);
 
     const maxSize = Math.max(...sizes, 1);

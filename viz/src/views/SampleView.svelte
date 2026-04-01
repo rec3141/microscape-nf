@@ -196,10 +196,11 @@
       }
     }
 
-    // Build palette + z indices
+    // Build palette + z values normalized to 0-1
     const uniqueColors = [...new Set(hexArr)];
     const colorIdx = {};
-    uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
+    const nColors = Math.max(uniqueColors.length - 1, 1);
+    uniqueColors.forEach((c, i) => { colorIdx[c] = i / nColors; });
     const zArr = hexArr.map(c => colorIdx[c]);
 
     const minPx = 200 * scale;
