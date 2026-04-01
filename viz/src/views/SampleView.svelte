@@ -13,6 +13,7 @@
   let canvas = $state(null);
   let scatterplot = $state(null);
   let tooltip = $state({ show: false, x: 0, y: 0, text: '' });
+  let hasZoomed = false;
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -21,7 +22,8 @@
     if (filters.sampleFilter) {
       try {
         const re = new RegExp(filters.sampleFilter, 'i');
-        s = s.filter(sample => re.test(sample.id ?? ''));
+        const matched = s.filter(sample => re.test(sample.id ?? ''));
+        if (matched.length > 0) s = matched;
       } catch {}
     }
     return s;
@@ -149,11 +151,14 @@
       size: sizes,
       color: colors,
     }).then(() => {
-      scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
-        padding: 0.2,
-        transition: true,
-        transitionDuration: 500,
-      });
+      if (!hasZoomed) {
+        scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
+          padding: 0.2,
+          transition: true,
+          transitionDuration: 500,
+        });
+        hasZoomed = true;
+      }
     });
   });
 

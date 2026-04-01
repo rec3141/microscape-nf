@@ -12,6 +12,7 @@
   let canvas = $state(null);
   let scatterplot = $state(null);
   let tooltip = $state({ show: false, x: 0, y: 0, text: '' });
+  let hasZoomed = false;
 
   let taxonRe = $derived(() => {
     try { return filters.taxonFilter ? new RegExp(filters.taxonFilter, 'i') : null; }
@@ -95,9 +96,12 @@
     const colors = filteredAsvs.map(a => GROUP_COLORS[a.group ?? 'prokaryote'] ?? GROUP_COLORS.prokaryote);
 
     scatterplot.draw({ x: xArr, y: yArr, size: sizes, color: colors }).then(() => {
-      scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
-        padding: 0.2, transition: true, transitionDuration: 500,
-      });
+      if (!hasZoomed) {
+        scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
+          padding: 0.2, transition: true, transitionDuration: 500,
+        });
+        hasZoomed = true;
+      }
     });
   });
 
