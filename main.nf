@@ -109,6 +109,7 @@ if (params.run_demultiplex && (!params.forward_bcs || !params.reverse_bcs)) {
 // Stage A: Preprocessing and denoising
 include { DEMULTIPLEX }       from './modules/demultiplex'
 include { REMOVE_PRIMERS }    from './modules/primers'
+include { AUTO_TRIM }         from './modules/denoise'
 include { FILTER_TRIM }       from './modules/denoise'
 include { LEARN_ERRORS }      from './modules/denoise'
 include { DENOISE }           from './modules/denoise'
@@ -184,8 +185,18 @@ workflow {
             }
     }
 
-    // 4a. Filter and trim per-sample
-    FILTER_TRIM(ch_trimmed)
+    // 4a. Auto-detect truncation lengths (or use explicit params)
+    if (params.auto_trim && params.truncLen_fwd == 0 && params.truncLen_rev == 0) {
+        AUTO_TRIM(file(params.input))
+        ch_trunc_fwd = AUTO_TRIM.out.trunc_fwd
+        ch_trunc_rev = AUTO_TRIM.out.trunc_rev
+    } else {
+        ch_trunc_fwd = Channel.value(params.truncLen_fwd)
+        ch_trunc_rev = Channel.value(params.truncLen_rev)
+    }
+
+    // 4b. Filter and trim per-sample
+    FILTER_TRIM(ch_trimmed, ch_trunc_fwd, ch_trunc_rev)
 
     // 4b. Group filtered reads by plate
     ch_by_plate = FILTER_TRIM.out.reads

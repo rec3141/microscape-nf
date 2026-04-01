@@ -18,6 +18,32 @@ def denoiseEngine() { return params.denoise_engine ?: params.lang }
 def errExt() { return denoiseEngine() == 'python' ? 'pkl' : 'rds' }
 def seqExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 
+process AUTO_TRIM {
+    label 'process_low'
+    conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
+    publishDir "${params.outdir}/quality_check", mode: 'copy'
+
+    input:
+    path(input_dir)
+
+    output:
+    path("auto_trim.tsv"), emit: params_tsv
+    env(TRUNC_FWD), emit: trunc_fwd
+    env(TRUNC_REV), emit: trunc_rev
+
+    script:
+    """
+    microscape auto-trim "${input_dir}" \
+        --min-quality ${params.auto_trim_min_quality} \
+        --output auto_trim.tsv \
+        --verbose
+
+    export TRUNC_FWD=\$(grep trunc_len_fwd auto_trim.tsv | cut -f2)
+    export TRUNC_REV=\$(grep trunc_len_rev auto_trim.tsv | cut -f2)
+    echo "[INFO] Auto-trim: fwd=\$TRUNC_FWD rev=\$TRUNC_REV"
+    """
+}
+
 process FILTER_TRIM {
     tag "${meta.id}"
     label 'process_low'
@@ -26,12 +52,16 @@ process FILTER_TRIM {
 
     input:
     tuple val(meta), path(r1), path(r2)
+    val(trunc_fwd)
+    val(trunc_rev)
 
     output:
     tuple val(meta), path("${meta.id}_R1.filt.fastq.gz"), path("${meta.id}_R2.filt.fastq.gz"), emit: reads
     path("${meta.id}_filt_stats.tsv"), emit: stats
 
     script:
+    def eff_trunc_fwd = params.truncLen_fwd > 0 ? params.truncLen_fwd : trunc_fwd
+    def eff_trunc_rev = params.truncLen_rev > 0 ? params.truncLen_rev : trunc_rev
     if (params.lang == 'python')
     """
     papa2 filter-trim \
@@ -40,8 +70,8 @@ process FILTER_TRIM {
         --max-ee ${params.maxEE} \
         --trunc-q ${params.truncQ} \
         --max-n ${params.maxN} \
-        --trunc-len-fwd ${params.truncLen_fwd} \
-        --trunc-len-rev ${params.truncLen_rev} \
+        --trunc-len-fwd ${eff_trunc_fwd} \
+        --trunc-len-rev ${eff_trunc_rev} \
         --stats "${meta.id}_filt_stats.tsv" \
         --sample-id "${meta.id}"
     """
