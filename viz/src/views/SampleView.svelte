@@ -146,7 +146,8 @@
             const d = (s.x - pt.x) ** 2 + (s.y - pt.y) ** 2;
             if (d < bestDist) { bestDist = d; bestIdx = i; }
           });
-          const sIdx = bestIdx >= 0 ? store.samples.indexOf(filteredSamples[bestIdx]) : -1;
+          const sId = bestIdx >= 0 ? filteredSamples[bestIdx]?.id : null;
+          const sIdx = sId ? store.samples.findIndex(s => s.id === sId) : -1;
           store.selectedSample = sIdx >= 0 ? sIdx : null;
         }
       });
