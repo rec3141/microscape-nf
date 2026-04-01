@@ -62,7 +62,7 @@
     };
 
     const layout = {
-      dragmode: 'lasso',
+      dragmode: 'pan',
       xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false },
       yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x' },
       plot_bgcolor: 'rgba(2, 6, 15, 1)',
@@ -93,8 +93,21 @@
     }
   });
 
+  function handleKey(e) {
+    if (!plotDiv || !hasPlot) return;
+    if (e.type === 'keydown' && e.key === 'Shift') {
+      Plotly.relayout(plotDiv, { dragmode: 'lasso' });
+    } else if (e.type === 'keyup' && e.key === 'Shift') {
+      Plotly.relayout(plotDiv, { dragmode: 'pan' });
+    }
+  }
+
   onMount(() => {
+    window.addEventListener('keydown', handleKey);
+    window.addEventListener('keyup', handleKey);
     return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('keyup', handleKey);
       if (plotDiv && hasPlot) Plotly.purge(plotDiv);
     };
   });
