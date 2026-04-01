@@ -2,6 +2,7 @@
   const tabs = [
     { id: 'samples', label: 'Sample Explorer', hash: '#samples' },
     { id: 'network', label: 'ASV Network', hash: '#network' },
+    { id: 'phylogeny', label: 'Phylogeny', hash: '#phylogeny' },
     { id: 'tables', label: 'Data Tables', hash: '#tables' },
   ];
 

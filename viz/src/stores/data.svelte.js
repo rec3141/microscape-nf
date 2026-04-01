@@ -13,6 +13,7 @@ export const store = $state({
   counts: { data: [], samples: [], asvs: [] },
   network: { edges: [] },
   taxonomy: {},
+  treeNewick: '',
 
   // Selection
   selectedSample: null,
@@ -78,12 +79,13 @@ export async function loadData() {
   store.error = null;
 
   try {
-    const [samples, asvs, counts, network, taxonomy] = await Promise.all([
+    const [samples, asvs, counts, network, taxonomy, treeNewick] = await Promise.all([
       fetchJson('/data/samples.json').catch(() => []),
       fetchJson('/data/asvs.json').catch(() => []),
       fetchJson('/data/counts.json').catch(() => ({ data: [], samples: [], asvs: [] })),
       fetchJson('/data/network.json').catch(() => ({ edges: [] })),
       fetchJson('/data/taxonomy.json').catch(() => ({})),
+      fetch('/data/tree.nwk').then(r => r.ok ? r.text() : '').catch(() => ''),
     ]);
 
     store.samples = samples;
@@ -91,6 +93,7 @@ export async function loadData() {
     store.counts = counts;
     store.network = network;
     store.taxonomy = taxonomy;
+    store.treeNewick = treeNewick.trim();
   } catch (e) {
     store.error = e.message;
     console.error('[microscape] Data load failed:', e);
