@@ -34,17 +34,29 @@
   });
 
   let topTaxa = $derived.by(() => {
-    if (store.selectedSample == null) return [];
-    const sampleId = store.samples[store.selectedSample]?.id;
-    const entries = cMap.get(sampleId) ?? [];
-    const total = entries.reduce((s, e) => s + e.count, 0) || 1;
     const re = taxonRe();
     const gf = filters.groupFlags || {};
-    return entries
-      .map(e => ({
-        asv: store.asvs[e.asv_idx],
-        count: e.count,
-        pct: ((e.count / total) * 100).toFixed(1),
+
+    // Merge counts across selected sample(s) or all filtered samples
+    const merged = new Map();
+    const sampleIds = store.selectedSample != null
+      ? [store.samples[store.selectedSample]?.id]
+      : filteredSamples.map(s => s.id);
+
+    for (const sampleId of sampleIds) {
+      for (const e of (cMap.get(sampleId) ?? [])) {
+        const prev = merged.get(e.asv_idx) || 0;
+        merged.set(e.asv_idx, prev + e.count);
+      }
+    }
+
+    const total = [...merged.values()].reduce((s, c) => s + c, 0) || 1;
+
+    return [...merged.entries()]
+      .map(([asv_idx, count]) => ({
+        asv: store.asvs[asv_idx],
+        count,
+        pct: ((count / total) * 100).toFixed(1),
       }))
       .filter(e => {
         if (!e.asv) return false;
@@ -54,7 +66,7 @@
         return true;
       })
       .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
+      .slice(0, 50);
   });
 
   let selectedSampleObj = $derived(
@@ -195,19 +207,24 @@
     <div bind:this={plotDiv} class="absolute inset-0"></div>
   </div>
 
-  {#if selectedSampleObj}
+  {#if topTaxa.length > 0}
     <div class="border-t border-slate-800 bg-slate-900/80 p-4">
       <div class="mb-2 flex items-center justify-between">
         <h3 class="text-sm font-semibold text-slate-200">
-          {selectedSampleObj.id ?? 'Sample'} &mdash; {(selectedSampleObj.total_reads ?? 0).toLocaleString()} reads
+          {#if selectedSampleObj}
+            {selectedSampleObj.id} &mdash; {(selectedSampleObj.total_reads ?? 0).toLocaleString()} reads
+          {:else}
+            All samples ({filteredSamples.length}) &mdash; top {topTaxa.length} ASVs
+          {/if}
         </h3>
-        <button
-          class="text-xs text-slate-500 hover:text-slate-300"
-          onclick={() => store.selectedSample = null}
-        >Close</button>
+        {#if selectedSampleObj}
+          <button
+            class="text-xs text-slate-500 hover:text-slate-300"
+            onclick={() => store.selectedSample = null}
+          >Clear selection</button>
+        {/if}
       </div>
 
-      {#if topTaxa.length > 0}
         <div class="max-h-48 overflow-y-auto">
           <table class="w-full text-xs">
             <thead class="sticky top-0 bg-slate-900 text-left text-slate-400">
@@ -237,9 +254,6 @@
             </tbody>
           </table>
         </div>
-      {:else}
-        <p class="text-xs text-slate-500">No taxa for this sample.</p>
-      {/if}
     </div>
   {/if}
 </div>
