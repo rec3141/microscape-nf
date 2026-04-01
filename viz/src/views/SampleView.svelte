@@ -112,15 +112,22 @@
       });
 
       sp.subscribe('pointover', (idx) => {
-        // Map any layer back to sample index
-        const sampleIdx = idx < numBasePts ? idx : idx % numBasePts;
-        const s = filteredSamples[sampleIdx];
+        let s, asvInfo;
+        if (idx < numBasePts) {
+          s = filteredSamples[idx];
+        } else {
+          const entry = overlayEntries[idx - numBasePts];
+          if (entry) {
+            s = filteredSamples.find((_, i) => store.samples.indexOf(filteredSamples[i]) === entry.sampleIdx)
+              || store.samples[entry.sampleIdx];
+            asvInfo = store.asvs[entry.asvIdx];
+          }
+        }
         if (s) {
-          tooltip = {
-            show: true,
-            x: 0, y: 0,
-            text: `${s.id ?? 'Sample ' + sampleIdx} | ${(s.total_reads ?? 0).toLocaleString()} reads`,
-          };
+          const text = asvInfo
+            ? `${s.id} | ${asvInfo.id} ${asvInfo.taxonomy ?? ''}`
+            : `${s.id ?? 'Sample'} | ${(s.total_reads ?? 0).toLocaleString()} reads`;
+          tooltip = { show: true, x: 0, y: 0, text };
         }
       });
 
@@ -130,8 +137,14 @@
 
       sp.subscribe('select', ({ points: indices }) => {
         if (indices.length > 0) {
-          const sampleIdx = indices[0] < numBasePts ? indices[0] : indices[0] % numBasePts;
-          const sIdx = store.samples.indexOf(filteredSamples[sampleIdx]);
+          const idx = indices[0];
+          let sIdx;
+          if (idx < numBasePts) {
+            sIdx = store.samples.indexOf(filteredSamples[idx]);
+          } else {
+            const entry = overlayEntries[idx - numBasePts];
+            sIdx = entry ? entry.sampleIdx : -1;
+          }
           store.selectedSample = sIdx >= 0 ? sIdx : null;
         }
       });
@@ -167,7 +180,7 @@
     for (const entry of overlayEntries) {
       xArr.push(entry.x);
       yArr.push(entry.y);
-      sizes.push(Math.max(5, Math.sqrt(Math.sqrt(entry.proportion)) * 80));
+      sizes.push(Math.max(5, Math.sqrt(entry.proportion) * 80));
 
       const asv = store.asvs[entry.asvIdx];
       if (cmap && asv) {
@@ -179,15 +192,7 @@
       }
     }
 
-    // Layer 3: transparent clickable points at sample positions (on top)
     numBasePts = filteredSamples.length;
-    const clickLayerStart = xArr.length;
-    for (const s of filteredSamples) {
-      xArr.push(s.x);
-      yArr.push(s.y);
-      sizes.push(Math.max(30, Math.log2((s.total_reads ?? 1) + 1) * 14));
-      hexArr.push('rgba(0,0,0,0)');
-    }
 
     // Build palette + z indices
     const uniqueColors = [...new Set(hexArr)];
@@ -195,7 +200,7 @@
     uniqueColors.forEach((c, i) => { colorIdx[c] = i; });
     const zArr = hexArr.map(c => colorIdx[c]);
 
-    scatterplot.set({ pointColor: uniqueColors, colorBy: 'valueZ', opacity: 0.7 });
+    scatterplot.set({ pointColor: uniqueColors, colorBy: 'valueZ', opacity: 1.0 });
     scatterplot.draw({
       x: xArr,
       y: yArr,
