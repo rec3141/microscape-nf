@@ -171,7 +171,7 @@ workflow {
     if (params.skip_primer_removal) {
         ch_trimmed = ch_demuxed
             .map { meta, r1, r2 ->
-                def plate = meta.id.split('_')[0]
+                def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
                 def new_meta = meta + [plate: plate]
                 [new_meta, r1, r2]
             }
@@ -179,7 +179,7 @@ workflow {
         REMOVE_PRIMERS(ch_demuxed)
         ch_trimmed = REMOVE_PRIMERS.out.reads
             .map { meta, r1, r2 ->
-                def plate = meta.id.split('_')[0]
+                def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
                 def new_meta = meta + [plate: plate]
                 [new_meta, r1, r2]
             }
