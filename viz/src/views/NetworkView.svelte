@@ -4,7 +4,7 @@
   import {
     store,
     GROUP_HEX,
-    buildTaxColorMap, getAsvColor,
+    buildTaxColorMap, getAsvColor, getEffectiveColorLevel,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -36,7 +36,7 @@
   $effect(() => {
     if (!plotDiv || filteredAsvs.length === 0) return;
 
-    const colorLevel = filters.colorByLevel;
+    const colorLevel = getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter);
     const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel).colorMap : null;
 
     const colors = filteredAsvs.map(a => {

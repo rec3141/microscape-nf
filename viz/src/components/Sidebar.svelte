@@ -1,5 +1,5 @@
 <script>
-  import { store, GROUP_HEX, buildTaxColorMap } from '../stores/data.svelte.js';
+  import { store, GROUP_HEX, buildTaxColorMap, getEffectiveColorLevel } from '../stores/data.svelte.js';
   import AutocompleteInput from './AutocompleteInput.svelte';
 
   let { activeTab = 'samples', filters = $bindable({}) } = $props();
@@ -83,9 +83,14 @@
             {/each}
           </fieldset>
         {:else}
-          {@const taxColors = buildTaxColorMap(filters.colorByLevel)}
+          {@const effectiveLevel = getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)}
+          {@const taxColors = buildTaxColorMap(effectiveLevel)}
           <div class="space-y-0.5 max-h-48 overflow-y-auto">
-            <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
+            {#if effectiveLevel !== filters.colorByLevel}
+              <p class="text-[10px] text-cyan-400 mb-1">Coloring by {effectiveLevel} ({taxColors.ranked.length})</p>
+            {:else}
+              <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
+            {/if}
             {#each taxColors.ranked as item}
               <button
                 class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-0.5"

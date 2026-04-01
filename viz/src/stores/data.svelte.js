@@ -95,6 +95,47 @@ export function buildTaxColorMap(level) {
 }
 
 /**
+ * Determine the effective color level: if the taxon filter matches a taxon
+ * at the current level, drill down to the next level to show diversity within.
+ */
+export function getEffectiveColorLevel(colorByLevel, taxonFilter) {
+  if (!taxonFilter || colorByLevel === 'group') return colorByLevel;
+
+  const db = Object.keys(store.taxonomy)[0];
+  if (!db || !store.taxonomy[db]) return colorByLevel;
+
+  const levels = store.taxonomy[db].levels || [];
+  const assignments = store.taxonomy[db].assignments || {};
+  const levelIdx = levels.indexOf(colorByLevel);
+  if (levelIdx < 0) return colorByLevel;
+
+  // Check if the filter matches a taxon name at the current level
+  const taxaAtLevel = new Set();
+  for (const asvId in assignments) {
+    const val = assignments[asvId]?.[levelIdx];
+    if (val) taxaAtLevel.add(val);
+  }
+
+  // If filter exactly matches (or regex matches exactly one) taxon at this level,
+  // drill down to the next level
+  let matchCount = 0;
+  try {
+    const re = new RegExp(`^${taxonFilter}$`, 'i');
+    for (const t of taxaAtLevel) {
+      if (re.test(t)) matchCount++;
+    }
+  } catch {
+    return colorByLevel;
+  }
+
+  if (matchCount === 1 && levelIdx < levels.length - 1) {
+    return levels[levelIdx + 1];
+  }
+
+  return colorByLevel;
+}
+
+/**
  * Get the hex color for an ASV given a taxonomy level and color map.
  */
 export function getAsvColor(asvId, level, colorMap) {

@@ -3,7 +3,7 @@
   import {
     store,
     GROUP_COLORS, GROUP_HEX,
-    buildTaxColorMap, getAsvColor, hexToRgba255,
+    buildTaxColorMap, getAsvColor, getEffectiveColorLevel, hexToRgba255,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -60,9 +60,11 @@
   });
 
   // ---- Node styles using shared color-by ----
+  let effectiveColorLevel = $derived(getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter));
+
   let taxColorMap = $derived.by(() => {
-    if (filters.colorByLevel === 'group') return null;
-    return buildTaxColorMap(filters.colorByLevel);
+    if (effectiveColorLevel === 'group') return null;
+    return buildTaxColorMap(effectiveColorLevel);
   });
 
   let nodeStyles = $derived.by(() => {
@@ -84,7 +86,7 @@
 
       let hex;
       if (cmap) {
-        hex = getAsvColor(id, filters.colorByLevel, cmap);
+        hex = getAsvColor(id, effectiveColorLevel, cmap);
       } else {
         hex = GROUP_HEX[asv.group] || GROUP_HEX.unknown;
       }
