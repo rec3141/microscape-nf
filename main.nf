@@ -127,6 +127,7 @@ include { LOAD_METADATA }     from './modules/metadata'
 include { CLUSTER_TSNE }      from './modules/cluster'
 include { NETWORK_SPARCC }    from './modules/network'
 include { BUILD_VIZ }         from './modules/shiny'
+include { BUNDLE_VIZ_SITE }  from './modules/shiny'
 
 // ============================================================================
 // Main workflow
@@ -310,6 +311,14 @@ workflow {
             CLUSTER_TSNE.out.seq_tsne,
             NETWORK_SPARCC.out.correlations
         )
+
+        // 13. Optional: bundle static viz site (requires Node.js)
+        if (params.build_viz_site) {
+            BUNDLE_VIZ_SITE(
+                BUILD_VIZ.out.json.collect(),
+                BUILD_VIZ.out.json_gz.collect()
+            )
+        }
     }
 }
 
