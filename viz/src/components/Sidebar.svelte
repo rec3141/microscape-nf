@@ -86,26 +86,25 @@
           {@const effectiveLevel = getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)}
           {@const taxColors = buildTaxColorMap(effectiveLevel, filters.taxonFilter)}
           <div class="space-y-0.5 max-h-48 overflow-y-auto">
-            {#if effectiveLevel !== filters.colorByLevel || filters.taxonFilter}
-              <div class="flex items-center gap-1 mb-1">
-                <button
-                  class="px-2 py-0.5 text-sm text-cyan-400 hover:text-cyan-300 hover:bg-slate-800 font-bold rounded border border-slate-700"
-                  onclick={() => {
-                    const levels = taxLevels;
-                    const idx = levels.indexOf(filters.colorByLevel);
-                    if (idx > 0) {
-                      filters.colorByLevel = levels[idx - 1];
-                    }
-                    filters.taxonFilter = '';
-                  }}
-                  title="Go up one level"
-                >&#x25B4; Up</button>
-                <p class="text-xs text-cyan-400">
-                  {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})
-                </p>
-              </div>
-            {:else}
-              <p class="text-[10px] text-slate-500 mb-1">{taxColors.ranked.length} taxa</p>
+            <p class="text-[10px] text-slate-500 mb-1">
+              {effectiveLevel === '_asv' ? 'ASV' : effectiveLevel} ({taxColors.ranked.length})
+            </p>
+            {#if filters.taxonFilter || effectiveLevel !== filters.colorByLevel}
+              {@const upLevel = (() => { const idx = taxLevels.indexOf(filters.colorByLevel); return idx > 0 ? taxLevels[idx - 1] : 'group'; })()}
+              <button
+                class="flex items-center gap-1.5 w-full text-left text-xs hover:bg-slate-800 rounded px-1 py-1 text-cyan-400 border-b border-slate-700 mb-1"
+                onclick={() => {
+                  const idx = taxLevels.indexOf(filters.colorByLevel);
+                  if (idx > 0) {
+                    filters.colorByLevel = taxLevels[idx - 1];
+                  } else {
+                    filters.colorByLevel = 'group';
+                  }
+                  filters.taxonFilter = '';
+                }}
+              >
+                &#x25B4; Up to {upLevel === 'group' ? 'Group' : upLevel}
+              </button>
             {/if}
             {#each taxColors.ranked as item}
               <button
