@@ -109,7 +109,7 @@
         canvas,
         width: rect.width,
         height: rect.height,
-        pointSize: 5,
+        pointSize: 200,
         opacity: 0.8,
         lassoOnLongPress: true,
         backgroundColor: [0.02, 0.06, 0.1, 1],
@@ -147,7 +147,7 @@
 
     const xArr = filteredSamples.map(s => s.x);
     const yArr = filteredSamples.map(s => s.y);
-    const sizes = filteredSamples.map(s => Math.max(2, Math.log2((s.total_reads ?? 1) + 1)));
+    const sizes = filteredSamples.map(s => Math.max(25, Math.log2((s.total_reads ?? 1) + 1) * 12));
     const colors = filteredSamples.map(() => [0.5, 0.55, 0.65, 0.5]);
 
     scatterplot.draw({
@@ -155,6 +155,12 @@
       y: yArr,
       size: sizes,
       color: colors,
+    }).then(() => {
+      scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
+        padding: 0.2,
+        transition: true,
+        transitionDuration: 500,
+      });
     });
   });
 

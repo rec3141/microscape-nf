@@ -74,7 +74,7 @@
         canvas,
         width: rect.width,
         height: rect.height,
-        pointSize: 4,
+        pointSize: 200,
         opacity: 0.85,
         lassoOnLongPress: true,
         backgroundColor: [0.02, 0.06, 0.1, 1],
@@ -112,10 +112,16 @@
 
     const xArr = filteredAsvs.map(a => a.x ?? 0);
     const yArr = filteredAsvs.map(a => a.y ?? 0);
-    const sizes = filteredAsvs.map(a => Math.max(2, Math.log2((a.total_reads ?? 1) + 1) * 0.8));
+    const sizes = filteredAsvs.map(a => Math.max(25, Math.log2((a.total_reads ?? 1) + 1) * 12));
     const colors = filteredAsvs.map(a => GROUP_COLORS[a.group ?? 'prokaryote'] ?? GROUP_COLORS.prokaryote);
 
-    scatterplot.draw({ x: xArr, y: yArr, size: sizes, color: colors });
+    scatterplot.draw({ x: xArr, y: yArr, size: sizes, color: colors }).then(() => {
+      scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
+        padding: 0.2,
+        transition: true,
+        transitionDuration: 500,
+      });
+    });
   });
 
   // ── Draw edges on SVG overlay ─────────────────────────────────────────────
