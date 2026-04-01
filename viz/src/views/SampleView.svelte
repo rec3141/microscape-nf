@@ -155,13 +155,12 @@
     const xArr = filteredSamples.map(s => s.x);
     const yArr = filteredSamples.map(s => s.y);
     const sizes = filteredSamples.map(s => Math.max(25, Math.log2((s.total_reads ?? 1) + 1) * 12));
-    const colors = filteredSamples.map(() => [0.5, 0.55, 0.65, 0.5]);
 
+    scatterplot.set({ pointColor: ['#8899aa'] });
     scatterplot.draw({
       x: xArr,
       y: yArr,
       size: sizes,
-      color: colors,
     }).then(() => {
       if (!hasZoomed) {
         scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {

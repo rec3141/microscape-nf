@@ -96,11 +96,12 @@
     const sizes = filteredAsvs.map(a => Math.max(25, Math.log2((a.total_reads ?? 1) + 1) * 12));
     const cmap = filters.colorByLevel !== 'group' ? buildTaxColorMap(filters.colorByLevel).colorMap : null;
     const colors = filteredAsvs.map(a => {
-      if (cmap) return hexToRegl(getAsvColor(a.id, filters.colorByLevel, cmap));
-      return GROUP_COLORS[a.group ?? 'prokaryote'] ?? GROUP_COLORS.prokaryote;
+      if (cmap) return getAsvColor(a.id, filters.colorByLevel, cmap);
+      return GROUP_HEX[a.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
     });
 
-    scatterplot.draw({ x: xArr, y: yArr, size: sizes, color: colors }).then(() => {
+    scatterplot.set({ pointColor: colors });
+    scatterplot.draw({ x: xArr, y: yArr, size: sizes }).then(() => {
       if (!hasZoomed) {
         scatterplot.zoomToPoints(Array.from({ length: xArr.length }, (_, i) => i), {
           padding: 0.2, transition: true, transitionDuration: 500,
