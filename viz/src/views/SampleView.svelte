@@ -93,7 +93,7 @@
           size: Math.max(2, Math.pow(proportion, 0.25) * 15 * scale),
           color,
           proportion,
-          text: `${asv.id}<br>${asv.taxonomy ?? ''}<br>${(proportion * 1000).toFixed(1)} ‰`,
+          text: `${sample.id}<br>${(sample.total_reads ?? 0).toLocaleString()} reads | ${sample.n_asvs ?? 0} ASVs`,
         });
       }
     }
