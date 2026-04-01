@@ -221,13 +221,15 @@
             </thead>
             <tbody class="text-slate-300">
               {#each topTaxa as row}
+                {@const colorLevel = filters.colorMode === 'group' ? 'group' : getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)}
+                {@const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap : null}
+                {@const rowColor = cmap ? getAsvColor(row.asv.id, colorLevel, cmap) : (GROUP_HEX[row.asv.group] ?? GROUP_HEX.prokaryote)}
                 <tr class="border-t border-slate-800/50 hover:bg-slate-800/30">
-                  <td class="py-1 pr-4 font-mono">{row.asv.id ?? ''}</td>
-                  <td class="py-1 pr-4 max-w-xs truncate">{row.asv.taxonomy ?? ''}</td>
-                  <td class="py-1 pr-4">
-                    <span class="inline-block h-2 w-2 rounded-full mr-1" style="background:{GROUP_HEX[row.asv.group] ?? GROUP_HEX.prokaryote}"></span>
-                    {row.asv.group ?? ''}
+                  <td class="py-1 pr-4 font-mono">
+                    <span class="inline-block h-2.5 w-2.5 rounded-full mr-1.5" style="background:{rowColor}"></span>
+                    {row.asv.id ?? ''}
                   </td>
+                  <td class="py-1 pr-4 max-w-xs truncate">{row.asv.taxonomy ?? ''}</td>
                   <td class="py-1 pr-4 text-right font-mono">{row.count.toLocaleString()}</td>
                   <td class="py-1 text-right font-mono">{row.pct}</td>
                 </tr>
