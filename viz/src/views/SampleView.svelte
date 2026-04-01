@@ -63,68 +63,59 @@
     const gf = filters.groupFlags || {};
     const scale = filters.pointScale ?? 1;
 
-    // Build traces: one per taxonomic group for legend
-    const overlayByGroup = {};
+    // Collect all points, then sort largest first so they draw behind small ones
+    const allPoints = [];
 
-    {
-      for (const sample of filteredSamples) {
-        const sIdx = store.samples.indexOf(sample);
-        const entries = cMap.get(sIdx) ?? [];
-        const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
+    for (const sample of filteredSamples) {
+      const sIdx = store.samples.indexOf(sample);
+      const entries = cMap.get(sIdx) ?? [];
+      const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
 
-        for (const { asv_idx, count } of entries) {
-          const asv = store.asvs[asv_idx];
-          if (!asv) continue;
+      for (const { asv_idx, count } of entries) {
+        const asv = store.asvs[asv_idx];
+        if (!asv) continue;
 
-          const group = asv.group ?? 'prokaryote';
-          if (gf[group] === false) continue;
-          if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
+        const group = asv.group ?? 'prokaryote';
+        if (gf[group] === false) continue;
+        if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
 
-          const proportion = count / totalCount;
-          let color;
-          let groupKey;
-          if (cmap) {
-            color = getAsvColor(asv.id, colorLevel, cmap);
-            // Group by the taxon name for this level
-            const db = Object.keys(store.taxonomy)[0];
-            const levels = store.taxonomy[db]?.levels || [];
-            const levelIdx = levels.indexOf(colorLevel);
-            const taxName = store.taxonomy[db]?.assignments?.[asv.id]?.[levelIdx] || 'unclassified';
-            groupKey = taxName;
-          } else {
-            color = GROUP_HEX[group] ?? GROUP_HEX.unknown;
-            groupKey = group;
-          }
-
-          if (!overlayByGroup[groupKey]) {
-            overlayByGroup[groupKey] = {
-              x: [], y: [], sizes: [], texts: [], color,
-            };
-          }
-          const g = overlayByGroup[groupKey];
-          g.x.push(sample.x);
-          g.y.push(sample.y);
-          g.sizes.push(Math.max(2, Math.sqrt(Math.sqrt(proportion)) * 15 * scale));
-          g.texts.push(`${asv.id}<br>${asv.taxonomy ?? ''}<br>${(proportion * 1000).toFixed(1)} ‰`);
+        const proportion = count / totalCount;
+        let color;
+        if (cmap) {
+          color = getAsvColor(asv.id, colorLevel, cmap);
+        } else {
+          color = GROUP_HEX[group] ?? GROUP_HEX.unknown;
         }
+
+        allPoints.push({
+          x: sample.x,
+          y: sample.y,
+          size: Math.max(2, Math.pow(proportion, 0.25) * 15 * scale),
+          color,
+          proportion,
+          text: `${asv.id}<br>${asv.taxonomy ?? ''}<br>${(proportion * 1000).toFixed(1)} ‰`,
+        });
       }
     }
 
-    const overlayTraces = Object.entries(overlayByGroup).map(([name, g]) => ({
-      x: g.x,
-      y: g.y,
+    // Sort largest first — plotly draws array order, so big points go first (behind)
+    allPoints.sort((a, b) => b.proportion - a.proportion);
+
+    const overlayTraces = [{
+      x: allPoints.map(p => p.x),
+      y: allPoints.map(p => p.y),
       mode: 'markers',
       type: 'scattergl',
       marker: {
-        size: g.sizes,
-        color: g.color,
-        opacity: 0.6,
+        size: allPoints.map(p => p.size),
+        color: allPoints.map(p => p.color),
+        opacity: 0.7,
         line: { width: 0 },
       },
-      text: g.texts,
+      text: allPoints.map(p => p.text),
       hoverinfo: 'text',
-      name,
-    }));
+      showlegend: false,
+    }];
 
     const layout = {
       dragmode: 'pan',
