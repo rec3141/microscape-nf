@@ -1,174 +1,230 @@
 <script>
   import { onMount } from 'svelte';
-  import Plotly from 'plotly.js-dist-min';
   import { store } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
 
-  let plotDiv;
-  let hasPlot = false;
   let heatmapData = $state(null);
+  let container;
+  let canvas;
+  let rowDendroSvg;
+  let colDendroSvg;
+  let tooltip = $state({ show: false, x: 0, y: 0, text: '' });
+
+  // Layout constants
+  const ROW_DENDRO_W = 80;
+  const COL_DENDRO_H = 60;
+  const LABEL_W = 0;  // auto-hide labels for large matrices
+  const LABEL_H = 0;
 
   onMount(async () => {
     try {
-      // Try .gz first (browser may auto-decompress via Content-Encoding)
       let res = await fetch('/data/heatmap.json.gz');
       if (!res.ok) res = await fetch('/data/heatmap.json');
-      if (res.ok) {
-        heatmapData = await res.json();
-      }
+      if (res.ok) heatmapData = await res.json();
     } catch (e) {
       console.error('Failed to load heatmap data:', e);
     }
-
-    return () => { if (plotDiv && hasPlot) Plotly.purge(plotDiv); };
   });
 
-  $effect(() => {
-    if (!plotDiv || !heatmapData) {
-      console.log('heatmap effect: plotDiv=', !!plotDiv, 'data=', !!heatmapData);
-      return;
+  // Viridis-ish colormap (256 entries)
+  function viridis(t) {
+    // Simplified viridis: dark purple -> teal -> yellow
+    const r = Math.round(Math.max(0, Math.min(255, -510 * t * t + 713 * t + 68)));
+    const g = Math.round(Math.max(0, Math.min(255, -270 * t * t + 442 * t + 24)));
+    const b = Math.round(Math.max(0, Math.min(255, 320 * t * t - 570 * t + 280)));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function buildViridisLUT() {
+    const lut = [];
+    for (let i = 0; i < 256; i++) {
+      const t = i / 255;
+      // Proper viridis approximation
+      const r = Math.round(255 * Math.max(0, Math.min(1, 0.267 + t * (0.004 + t * (3.312 + t * (-7.776 + t * 5.198))))));
+      const g = Math.round(255 * Math.max(0, Math.min(1, 0.004 + t * (0.873 + t * (0.682 + t * (-2.988 + t * 2.438))))));
+      const b = Math.round(255 * Math.max(0, Math.min(1, 0.329 + t * (1.409 + t * (-4.967 + t * (6.368 + t * (-2.632)))))));
+      lut.push([r, g, b]);
     }
-    console.log('heatmap: rendering', heatmapData.nSamples, 'x', heatmapData.nAsvs);
+    return lut;
+  }
+
+  const viridisLUT = buildViridisLUT();
+
+  $effect(() => {
+    if (!heatmapData || !canvas || !rowDendroSvg || !colDendroSvg) return;
 
     const { z, sampleIds, asvIds, asvLabels, rowDendro, colDendro } = heatmapData;
+    const nRows = z.length;
+    const nCols = z[0]?.length || 0;
+    if (nRows === 0 || nCols === 0) return;
 
-    if (!z || z.length < 2) return;
+    // Find max value for color scaling
+    let zMax = 0;
+    for (const row of z) for (const v of row) if (v > zMax) zMax = v;
+    if (zMax === 0) zMax = 1;
 
-    // Scipy dendrogram coords use 5, 15, 25... for leaf positions
-    // Scale to match plotly heatmap cell indices (0, 1, 2...)
-    const nSamples = sampleIds.length;
-    const nAsvs = asvIds.length;
+    // Get container size
+    const rect = container.getBoundingClientRect();
+    const heatW = rect.width - ROW_DENDRO_W;
+    const heatH = rect.height - COL_DENDRO_H;
 
-    function scaleCoords(coords, n) {
-      // Scipy uses 5, 15, 25... (step 10) for n leaves
-      // We need 0, 1, 2... (step 1)
-      return coords.map(arr => arr.map(v => (v - 5) / 10));
+    const cellW = heatW / nCols;
+    const cellH = heatH / nRows;
+
+    // ── Draw heatmap on canvas ──
+    canvas.width = heatW * window.devicePixelRatio;
+    canvas.height = heatH * window.devicePixelRatio;
+    canvas.style.width = heatW + 'px';
+    canvas.style.height = heatH + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    const imgData = ctx.createImageData(Math.ceil(heatW * window.devicePixelRatio), Math.ceil(heatH * window.devicePixelRatio));
+    const pixels = imgData.data;
+    const dpr = window.devicePixelRatio;
+
+    // Direct pixel painting for speed
+    for (let row = 0; row < nRows; row++) {
+      const y0 = Math.floor(row * cellH * dpr);
+      const y1 = Math.floor((row + 1) * cellH * dpr);
+      for (let col = 0; col < nCols; col++) {
+        const t = Math.min(z[row][col] / zMax, 1);
+        const ci = Math.round(t * 255);
+        const [r, g, b] = viridisLUT[ci];
+        const x0 = Math.floor(col * cellW * dpr);
+        const x1 = Math.floor((col + 1) * cellW * dpr);
+        for (let py = y0; py < y1; py++) {
+          for (let px = x0; px < x1; px++) {
+            const idx = (py * imgData.width + px) * 4;
+            pixels[idx] = r;
+            pixels[idx + 1] = g;
+            pixels[idx + 2] = b;
+            pixels[idx + 3] = 255;
+          }
+        }
+      }
     }
+    ctx.putImageData(imgData, 0, 0);
 
-    // Column dendrogram (above heatmap)
-    const colDendroTraces = [];
+    // ── Draw column dendrogram (SVG, above heatmap) ──
+    colDendroSvg.innerHTML = '';
+    colDendroSvg.setAttribute('width', heatW);
+    colDendroSvg.setAttribute('height', COL_DENDRO_H);
+
     if (colDendro.icoord.length > 0) {
-      const scaledI = scaleCoords(colDendro.icoord, nAsvs);
+      // scipy dendrogram: icoord values are 5, 15, 25... (step 10, centered on leaves)
+      // Scale to pixel positions
+      const maxDist = Math.max(...colDendro.dcoord.flat());
       for (let i = 0; i < colDendro.icoord.length; i++) {
-        colDendroTraces.push({
-          x: scaledI[i],
-          y: colDendro.dcoord[i],
-          type: 'scatter',
-          mode: 'lines',
-          line: { color: '#64748b', width: 0.8 },
-          xaxis: 'x',
-          yaxis: 'y3',
-          hoverinfo: 'skip',
-          showlegend: false,
-        });
+        const ix = colDendro.icoord[i];
+        const iy = colDendro.dcoord[i];
+        const points = [];
+        for (let j = 0; j < 4; j++) {
+          const px = ((ix[j] - 5) / (nCols * 10 - 10)) * heatW;
+          const py = COL_DENDRO_H - (iy[j] / maxDist) * (COL_DENDRO_H - 4);
+          points.push(`${px},${py}`);
+        }
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        line.setAttribute('points', points.join(' '));
+        line.setAttribute('fill', 'none');
+        line.setAttribute('stroke', '#64748b');
+        line.setAttribute('stroke-width', '0.8');
+        colDendroSvg.appendChild(line);
       }
     }
 
-    // Row dendrogram (left of heatmap)
-    const rowDendroTraces = [];
+    // ── Draw row dendrogram (SVG, left of heatmap) ──
+    rowDendroSvg.innerHTML = '';
+    rowDendroSvg.setAttribute('width', ROW_DENDRO_W);
+    rowDendroSvg.setAttribute('height', heatH);
+
     if (rowDendro.icoord.length > 0) {
-      const scaledI = scaleCoords(rowDendro.icoord, nSamples);
+      const maxDist = Math.max(...rowDendro.dcoord.flat());
       for (let i = 0; i < rowDendro.icoord.length; i++) {
-        rowDendroTraces.push({
-          x: rowDendro.dcoord[i].map(v => -v),  // flip to left side
-          y: scaledI[i],
-          type: 'scatter',
-          mode: 'lines',
-          line: { color: '#64748b', width: 0.8 },
-          xaxis: 'x2',
-          yaxis: 'y',
-          hoverinfo: 'skip',
-          showlegend: false,
-        });
+        const ix = rowDendro.icoord[i];  // leaf positions (vertical)
+        const iy = rowDendro.dcoord[i];  // heights (horizontal)
+        const points = [];
+        for (let j = 0; j < 4; j++) {
+          const py = ((ix[j] - 5) / (nRows * 10 - 10)) * heatH;
+          const px = ROW_DENDRO_W - (iy[j] / maxDist) * (ROW_DENDRO_W - 4);
+          points.push(`${px},${py}`);
+        }
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        line.setAttribute('points', points.join(' '));
+        line.setAttribute('fill', 'none');
+        line.setAttribute('stroke', '#64748b');
+        line.setAttribute('stroke-width', '0.8');
+        rowDendroSvg.appendChild(line);
       }
     }
 
-    // Main heatmap
-    const heatmapTrace = {
-      z: z,
-      x: asvLabels,
-      y: sampleIds,
-      type: 'heatmap',
-      colorscale: 'Viridis',
-      hovertemplate: 'Sample: %{y}<br>ASV: %{x}<br>Value: %{z:.4f}<extra></extra>',
-      xaxis: 'x',
-      yaxis: 'y',
-      colorbar: {
-        title: '∜(rel. abund.)',
-        len: 0.4,
-        thickness: 12,
-        x: 1.02,
-        titleside: 'right',
-        tickfont: { size: 9, color: '#94a3b8' },
-        titlefont: { size: 10, color: '#94a3b8' },
-      },
+    // ── Hover handler ──
+    canvas.onmousemove = (e) => {
+      const cr = canvas.getBoundingClientRect();
+      const mx = e.clientX - cr.left;
+      const my = e.clientY - cr.top;
+      const col = Math.floor(mx / cellW);
+      const row = Math.floor(my / cellH);
+      if (row >= 0 && row < nRows && col >= 0 && col < nCols) {
+        const val = z[row][col];
+        tooltip = {
+          show: true,
+          x: e.clientX,
+          y: e.clientY,
+          text: `${sampleIds[row]} | ${asvLabels[col]} | ${val.toFixed(4)}`,
+        };
+      } else {
+        tooltip = { show: false, x: 0, y: 0, text: '' };
+      }
     };
-
-    const traces = [heatmapTrace, ...colDendroTraces, ...rowDendroTraces];
-
-    const layout = {
-      plot_bgcolor: 'rgba(2,6,15,1)',
-      paper_bgcolor: 'rgba(2,6,15,1)',
-      font: { color: '#94a3b8', size: 9 },
-      margin: { l: 10, r: 60, t: 10, b: 10 },
-      // Main heatmap axes
-      xaxis: {
-        domain: [0.12, 0.98],
-        showticklabels: nAsvs <= 80,
-        tickfont: { size: 7 },
-        tickangle: -90,
-      },
-      yaxis: {
-        domain: [0, 0.85],
-        showticklabels: nSamples <= 80,
-        tickfont: { size: 7 },
-        autorange: true,
-      },
-      // Row dendrogram axis (left)
-      xaxis2: {
-        domain: [0, 0.11],
-        showticklabels: false,
-        showgrid: false,
-        zeroline: false,
-        autorange: 'reversed',
-      },
-      // Column dendrogram axis (top)
-      yaxis3: {
-        domain: [0.87, 1.0],
-        showticklabels: false,
-        showgrid: false,
-        zeroline: false,
-        anchor: 'x',
-      },
-      title: {
-        text: `${nSamples} samples × ${nAsvs} ASVs (Bray-Curtis, avg. linkage)`,
-        font: { size: 11, color: '#64748b' },
-        x: 0.55, y: 0.995,
-      },
+    canvas.onmouseleave = () => {
+      tooltip = { show: false, x: 0, y: 0, text: '' };
     };
-
-    const config = { scrollZoom: true, displayModeBar: false };
-
-    if (!hasPlot) {
-      Plotly.newPlot(plotDiv, traces, layout, config);
-      hasPlot = true;
-    } else {
-      Plotly.react(plotDiv, traces, layout, config);
-    }
   });
 </script>
 
 <div class="flex h-full flex-col">
-  <div class="flex-1 relative">
-    {#if !heatmapData}
-      <div class="absolute inset-0 flex items-center justify-center">
-        <div class="text-center">
-          <div class="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent mx-auto"></div>
-          <p class="text-sm text-slate-400">Loading heatmap data...</p>
+  {#if !heatmapData}
+    <div class="flex-1 flex items-center justify-center">
+      <div class="text-center">
+        <div class="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent mx-auto"></div>
+        <p class="text-sm text-slate-400">Loading heatmap data...</p>
+      </div>
+    </div>
+  {:else}
+    <div class="flex-1 relative" bind:this={container}>
+      <!-- Grid: [dendro-spacer][col-dendro] / [row-dendro][heatmap] -->
+      <div class="absolute inset-0 grid" style="grid-template-columns: {ROW_DENDRO_W}px 1fr; grid-template-rows: {COL_DENDRO_H}px 1fr;">
+        <!-- Top-left spacer -->
+        <div></div>
+        <!-- Column dendrogram -->
+        <div class="overflow-hidden">
+          <svg bind:this={colDendroSvg}></svg>
+        </div>
+        <!-- Row dendrogram -->
+        <div class="overflow-hidden">
+          <svg bind:this={rowDendroSvg}></svg>
+        </div>
+        <!-- Heatmap canvas -->
+        <div class="overflow-hidden">
+          <canvas bind:this={canvas} class="block"></canvas>
         </div>
       </div>
-    {/if}
-    <div bind:this={plotDiv} class="absolute inset-0" class:invisible={!heatmapData}></div>
-  </div>
+
+      <!-- Title -->
+      <div class="absolute top-1 left-1/2 -translate-x-1/2 text-xs text-slate-500 pointer-events-none">
+        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs (Bray-Curtis, avg. linkage)
+      </div>
+
+      <!-- Tooltip -->
+      {#if tooltip.show}
+        <div class="fixed z-50 rounded bg-slate-800/95 px-3 py-1.5 text-xs text-slate-200 shadow-lg pointer-events-none"
+          style="left: {tooltip.x + 12}px; top: {tooltip.y - 20}px;">
+          {tooltip.text}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>
