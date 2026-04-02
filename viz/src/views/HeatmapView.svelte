@@ -6,6 +6,7 @@
 
   let heatmapData = $state(null);
   let container;
+  let gridEl;
   let canvas;
   let rowDendroSvg;
   let colDendroSvg;
@@ -15,9 +16,10 @@
 
   // Layout constants
   const ROW_DENDRO_W = 80;
-  const COL_DENDRO_H = 60;
-  const COLOR_BAR_W = 8;  // row-side color bar width
-  const COLOR_BAR_H = 8;  // col-side color bar height
+  const COL_DENDRO_H = 120;
+  const COLOR_BAR_W = 8;
+  const COLOR_BAR_H = 8;
+  const MIN_CELL_PX = 3;  // minimum pixels per cell — determines scrollable size
 
   onMount(async () => {
     try {
@@ -175,8 +177,18 @@
 
     // Get container size
     const rect = container.getBoundingClientRect();
-    const heatW = rect.width - ROW_DENDRO_W - COLOR_BAR_W;
-    const heatH = rect.height - COL_DENDRO_H - COLOR_BAR_H;
+    const viewW = rect.width - ROW_DENDRO_W - COLOR_BAR_W;
+    const viewH = rect.height - COL_DENDRO_H - COLOR_BAR_H;
+
+    // Ensure minimum cell size — expand beyond viewport if needed (scrollable)
+    const heatW = Math.max(viewW, nCols * MIN_CELL_PX);
+    const heatH = Math.max(viewH, nRows * MIN_CELL_PX);
+
+    // Size the grid to fit content (may exceed viewport → scrollable)
+    if (gridEl) {
+      gridEl.style.width = (ROW_DENDRO_W + COLOR_BAR_W + heatW) + 'px';
+      gridEl.style.height = (COL_DENDRO_H + COLOR_BAR_H + heatH) + 'px';
+    }
 
     const cellW = heatW / nCols;
     const cellH = heatH / nRows;
@@ -376,7 +388,8 @@
   {:else}
     <div class="flex-1 relative" bind:this={container}>
       <!-- Grid: dendro | colorbar | heatmap, with col dendro and colorbar on top -->
-      <div class="absolute inset-0 grid" style="grid-template-columns: {ROW_DENDRO_W}px {COLOR_BAR_W}px 1fr; grid-template-rows: {COL_DENDRO_H}px {COLOR_BAR_H}px 1fr;">
+      <div class="absolute inset-0 overflow-auto" style="scrollbar-color: #334155 #0f172a;">
+      <div bind:this={gridEl} class="grid" style="grid-template-columns: {ROW_DENDRO_W}px {COLOR_BAR_W}px auto; grid-template-rows: {COL_DENDRO_H}px {COLOR_BAR_H}px auto;">
         <!-- Row 1: spacer | spacer | col dendrogram -->
         <div></div>
         <div></div>
@@ -399,6 +412,7 @@
         <div class="overflow-hidden">
           <canvas bind:this={canvas} class="block"></canvas>
         </div>
+      </div>
       </div>
 
       <!-- Title -->
