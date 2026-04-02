@@ -25,7 +25,11 @@
   });
 
   $effect(() => {
-    if (!plotDiv || !heatmapData) return;
+    if (!plotDiv || !heatmapData) {
+      console.log('heatmap effect: plotDiv=', !!plotDiv, 'data=', !!heatmapData);
+      return;
+    }
+    console.log('heatmap: rendering', heatmapData.nSamples, 'x', heatmapData.nAsvs);
 
     const { z, sampleIds, asvIds, asvLabels, rowDendro, colDendro } = heatmapData;
 
@@ -156,16 +160,15 @@
 </script>
 
 <div class="flex h-full flex-col">
-  {#if !heatmapData}
-    <div class="flex-1 flex items-center justify-center">
-      <div class="text-center">
-        <div class="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent mx-auto"></div>
-        <p class="text-sm text-slate-400">Computing heatmap clustering...</p>
+  <div class="flex-1 relative">
+    {#if !heatmapData}
+      <div class="absolute inset-0 flex items-center justify-center">
+        <div class="text-center">
+          <div class="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent mx-auto"></div>
+          <p class="text-sm text-slate-400">Loading heatmap data...</p>
+        </div>
       </div>
-    </div>
-  {:else}
-    <div class="flex-1 relative">
-      <div bind:this={plotDiv} class="absolute inset-0"></div>
-    </div>
-  {/if}
+    {/if}
+    <div bind:this={plotDiv} class="absolute inset-0" class:invisible={!heatmapData}></div>
+  </div>
 </div>
