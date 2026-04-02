@@ -72,8 +72,8 @@
           }
           return filteredAsvs.map(a => Math.log2((a.total_reads ?? 1) + 1));
         })(),
-        sizemode: 'area',
-        sizeref: 0.5 / (filters.networkPointScale ?? 1),
+        sizemode: 'diameter',
+        sizeref: 1.0 / (filters.networkPointScale ?? 10),
         sizemin: 1,
         color: colors,
         opacity: 0.7,
