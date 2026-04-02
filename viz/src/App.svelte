@@ -31,12 +31,12 @@
     minReads: 0,
     sampleFilter: '',
     showOverlay: true,
-    pointScale: 2.5,
+    pointScale: 20,
     // Network
     minPrevalence: 0,
     corrThreshold: 0.3,
     showEdges: true,
-    networkPointScale: 1.0,
+    networkPointScale: 10,
     // Selections (shared across views)
     lassoSampleIds: new Set(),
     lassoAsvIds: new Set(),

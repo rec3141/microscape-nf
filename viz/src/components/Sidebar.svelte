@@ -213,8 +213,8 @@
 
           {#if activeTab === 'samples'}
             <label class="block">
-              <span class="text-xs text-slate-400">Point scale: {(filters.pointScale ?? 2.5).toFixed(1)}x</span>
-              <input type="range" min="0.1" max="10" step="0.1" bind:value={filters.pointScale} class="mt-1 w-full accent-blue-500" />
+              <span class="text-xs text-slate-400">Point scale: {(filters.pointScale ?? 20).toFixed(0)}x</span>
+              <input type="range" min="1" max="100" step="1" bind:value={filters.pointScale} class="mt-1 w-full accent-blue-500" />
             </label>
           {/if}
         </div>
@@ -250,8 +250,8 @@
 
           {#if activeTab === 'network'}
             <label class="block">
-              <span class="text-xs text-slate-400">ASV point scale: {(filters.networkPointScale ?? 1).toFixed(1)}x</span>
-              <input type="range" min="0.1" max="10" step="0.1" bind:value={filters.networkPointScale} class="mt-1 w-full accent-blue-500" />
+              <span class="text-xs text-slate-400">ASV point scale: {(filters.networkPointScale ?? 10).toFixed(0)}x</span>
+              <input type="range" min="1" max="100" step="1" bind:value={filters.networkPointScale} class="mt-1 w-full accent-blue-500" />
             </label>
           {/if}
         </div>
