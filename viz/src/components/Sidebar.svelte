@@ -339,6 +339,11 @@
       {#if sections.heatmap}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
+            <span class="text-xs text-slate-400">Cell size: {filters.heatmapCellSize}px</span>
+            <input type="range" min="1" max="20" step="1" bind:value={filters.heatmapCellSize} class="mt-1 w-full accent-blue-500" />
+          </label>
+
+          <label class="block">
             <span class="text-xs text-slate-400">ASV ordering</span>
             <select bind:value={filters.heatmapAsvTree} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
               <option value="ward">Ward Clustering</option>

@@ -19,7 +19,7 @@
   const COL_DENDRO_H = 120;
   const COLOR_BAR_W = 8;
   const COLOR_BAR_H = 8;
-  const MIN_CELL_PX = 3;  // minimum pixels per cell — determines scrollable size
+  let cellSize = $derived(filters.heatmapCellSize ?? 3);
 
   onMount(async () => {
     try {
@@ -195,8 +195,8 @@
     const viewH = rect.height - COL_DENDRO_H - COLOR_BAR_H;
 
     // Ensure minimum cell size — expand beyond viewport if needed (scrollable)
-    const heatW = Math.max(viewW, nCols * MIN_CELL_PX);
-    const heatH = Math.max(viewH, nRows * MIN_CELL_PX);
+    const heatW = Math.max(viewW, nCols * cellSize);
+    const heatH = Math.max(viewH, nRows * cellSize);
 
     // Size the grid to fit content (may exceed viewport → scrollable)
     if (gridEl) {

@@ -47,6 +47,7 @@
 
     // Phylogeny
     heatmapAsvTree: 'ward',    // 'ward' or 'phylogeny' — ASV ordering on heatmap
+    heatmapCellSize: 3,
     treeLayout: 'rc',
     treeMinBootstrap: 0,
     treePrune: false,
