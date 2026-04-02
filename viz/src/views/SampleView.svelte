@@ -111,6 +111,7 @@
 
         const group = asv.group ?? 'prokaryote';
         if (gf[group] === false) continue;
+        if ((asv.n_samples ?? 0) < (filters.minPrevalence || 0)) continue;
         if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
 
         const proportion = count / totalCount;

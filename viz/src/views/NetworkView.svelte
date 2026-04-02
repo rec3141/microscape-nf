@@ -22,6 +22,7 @@
     const gf = filters.groupFlags || {};
     return store.asvs.filter(a => {
       if ((a.n_samples ?? 0) < (filters.minPrevalence || 0)) return false;
+      if ((a.total_reads ?? 0) < (filters.minReads || 0)) return false;
       const group = a.group ?? 'unknown';
       if (gf[group] === false) return false;
       if (re && !(re.test(a.taxonomy ?? '') || re.test(a.id ?? ''))) return false;
