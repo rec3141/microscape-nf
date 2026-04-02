@@ -127,7 +127,7 @@
         allPoints.push({
           x: sample.x,
           y: sample.y,
-          size: Math.pow(proportion, 0.25),
+          size: Math.pow(proportion, 0.25) * 20,
           color,
           proportion,
           text: `${sample.id}<br>${(sample.total_reads ?? 0).toLocaleString()} reads | ${sample.n_asvs ?? 0} ASVs`,
