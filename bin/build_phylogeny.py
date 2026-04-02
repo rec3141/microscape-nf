@@ -46,7 +46,9 @@ with open(input_path, "rb") as fh:
 
 if isinstance(data, pd.DataFrame):
     if "sequence" in data.columns:
-        unique_seqs = sorted(data["sequence"].unique().tolist())
+        # Sort by total abundance (descending) to match build_viz.py ASV numbering
+        seq_abundance = data.groupby("sequence")["count"].sum().sort_values(ascending=False)
+        unique_seqs = list(seq_abundance.index)
     else:
         print("[ERROR] DataFrame has no 'sequence' column", file=sys.stderr)
         sys.exit(1)
