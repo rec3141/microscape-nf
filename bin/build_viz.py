@@ -187,7 +187,7 @@ def build_asvs(seqtab, seq_tsne, renorm_table_list, taxonomy_dict):
 
     # Get unique sequences sorted for stable ASV IDs
     sequences = sorted(seqtab["sequence"].unique())
-    seq_to_id = {seq: f"ASV_{i+1:05d}" for i, seq in enumerate(sequences)}
+    seq_to_id = {seq: f"ASV_{i+1:06d}" for i, seq in enumerate(sequences)}
 
     # Aggregate per-ASV stats
     asv_stats = seqtab.groupby("sequence").agg(

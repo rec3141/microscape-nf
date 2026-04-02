@@ -68,7 +68,7 @@ if n_seqs == 0:
 # ---------------------------------------------------------------------------
 seq_map = {}
 for i, seq in enumerate(unique_seqs):
-    asv_id = f"ASV_{i+1:05d}"
+    asv_id = f"ASV_{i+1:06d}"
     seq_map[asv_id] = seq
 
 id_list = list(seq_map.keys())
