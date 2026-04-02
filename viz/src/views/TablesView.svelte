@@ -1,47 +1,142 @@
 <script>
-  import { store, GROUP_HEX } from '../stores/data.svelte.js';
+  import { store, GROUP_HEX, buildTaxColorMap, getAsvColor, getEffectiveColorLevel, getClusterColor } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
 
-  // ── Tab state ─────────────────────────────────────────────────────────────
-  let activeTable = $state('asvs'); // 'asvs' | 'samples'
+  let activeTable = $state('asvs');
   let search = $state('');
   let sortCol = $state(null);
   let sortAsc = $state(true);
 
-  // ── ASV table ─────────────────────────────────────────────────────────────
-  const asvCols = [
-    { key: 'id', label: 'ASV ID' },
-    { key: 'taxonomy', label: 'Taxonomy' },
-    { key: 'group', label: 'Group' },
-    { key: 'total_reads', label: 'Total Reads', numeric: true },
-    { key: 'n_samples', label: 'Prevalence', numeric: true },
-  ];
+  // ── Taxonomy helpers ──
+  let primaryDb = $derived(Object.keys(store.taxonomy)[0] || null);
+  let taxLevels = $derived(primaryDb ? (store.taxonomy[primaryDb]?.levels || []) : []);
+  let taxAssignments = $derived(primaryDb ? (store.taxonomy[primaryDb]?.assignments || {}) : {});
+  let taxBootstraps = $derived(primaryDb ? (store.taxonomy[primaryDb]?.bootstraps || {}) : {});
 
-  const sampleCols = [
-    { key: 'id', label: 'Sample ID' },
-    { key: 'total_reads', label: 'Reads', numeric: true },
-    { key: 'n_asvs', label: 'Richness', numeric: true },
-  ];
+  let effectiveColorLevel = $derived(
+    filters.colorMode === 'taxonomy'
+      ? getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)
+      : null
+  );
+  let taxCmap = $derived(
+    effectiveColorLevel && effectiveColorLevel !== 'group'
+      ? buildTaxColorMap(effectiveColorLevel, filters.taxonFilter).colorMap
+      : null
+  );
+
+  // ── Dynamic columns ──
+  let asvCols = $derived.by(() => {
+    const cols = [
+      { key: '_color', label: '', width: '30px' },
+      { key: 'id', label: 'ASV ID' },
+    ];
+
+    // Add taxonomy level columns
+    for (const level of taxLevels) {
+      cols.push({ key: `_tax_${level}`, label: level });
+    }
+
+    cols.push({ key: 'group', label: 'Group' });
+    cols.push({ key: 'total_reads', label: 'Reads', numeric: true });
+    cols.push({ key: 'n_samples', label: 'Prevalence', numeric: true });
+
+    // Add cluster columns if available
+    if (store.heatmap?.asvClusters) {
+      const k = filters.asvClusterK || 4;
+      cols.push({ key: '_asvCluster', label: `ASV Cluster (k=${k})`, numeric: true });
+    }
+
+    return cols;
+  });
+
+  let sampleCols = $derived.by(() => {
+    const cols = [
+      { key: '_color', label: '', width: '30px' },
+      { key: 'id', label: 'Sample ID' },
+      { key: 'total_reads', label: 'Reads', numeric: true },
+      { key: 'n_asvs', label: 'Richness', numeric: true },
+    ];
+
+    if (store.heatmap?.sampleClusters) {
+      const k = filters.sampleClusterK || 4;
+      cols.push({ key: '_sampleCluster', label: `Sample Cluster (k=${k})`, numeric: true });
+    }
+
+    return cols;
+  });
 
   let cols = $derived(activeTable === 'asvs' ? asvCols : sampleCols);
-  let rawRows = $derived(activeTable === 'asvs' ? store.asvs : store.samples);
 
+  // ── Build enriched rows ──
+  let rawRows = $derived.by(() => {
+    if (activeTable === 'asvs') {
+      const asvClusters = store.heatmap?.asvClusters?.[String(filters.asvClusterK || 4)] || {};
+      return store.asvs.map(a => {
+        const row = { ...a };
+        // Add taxonomy levels
+        const tax = taxAssignments[a.id];
+        if (tax) {
+          for (let i = 0; i < taxLevels.length; i++) {
+            row[`_tax_${taxLevels[i]}`] = tax[i] || '';
+          }
+        }
+        // Add cluster
+        row._asvCluster = asvClusters[a.id] || '';
+        // Add color
+        if (filters.colorMode === 'cluster') {
+          row._color = getClusterColor(a.id, 'asvCluster', filters.asvClusterK);
+        } else if (filters.colorMode === 'group') {
+          row._color = GROUP_HEX[a.group] || GROUP_HEX.unknown;
+        } else if (taxCmap) {
+          row._color = getAsvColor(a.id, effectiveColorLevel, taxCmap);
+        } else {
+          row._color = GROUP_HEX[a.group] || GROUP_HEX.unknown;
+        }
+        return row;
+      });
+    } else {
+      const sampleClusters = store.heatmap?.sampleClusters?.[String(filters.sampleClusterK || 4)] || {};
+      return store.samples.map(s => {
+        const row = { ...s };
+        row._sampleCluster = sampleClusters[s.id] || '';
+        if (filters.colorMode === 'cluster') {
+          row._color = getClusterColor(s.id, 'sampleCluster', filters.sampleClusterK);
+        } else {
+          row._color = '#475569';
+        }
+        return row;
+      });
+    }
+  });
+
+  // ── Filter by search and taxonomy filter ──
   let filteredRows = $derived.by(() => {
     let rows = rawRows;
+
+    // Taxonomy filter
+    if (filters.taxonFilter && activeTable === 'asvs') {
+      try {
+        const re = new RegExp(filters.taxonFilter, 'i');
+        rows = rows.filter(r => re.test(r.taxonomy ?? '') || re.test(r.id ?? ''));
+      } catch {
+        const lower = filters.taxonFilter.toLowerCase();
+        rows = rows.filter(r => (r.taxonomy ?? '').toLowerCase().includes(lower));
+      }
+    }
 
     // Search filter
     if (search) {
       const q = search.toLowerCase();
       rows = rows.filter(r =>
-        Object.values(r).some(v =>
-          v != null && String(v).toLowerCase().includes(q)
+        Object.entries(r).some(([k, v]) =>
+          k !== '_color' && v != null && String(v).toLowerCase().includes(q)
         )
       );
     }
 
     // Sort
-    if (sortCol) {
+    if (sortCol && sortCol !== '_color') {
       const col = cols.find(c => c.key === sortCol);
       const numeric = col?.numeric ?? false;
       rows = [...rows].sort((a, b) => {
@@ -61,54 +156,39 @@
     return rows;
   });
 
-  // ── Pagination ────────────────────────────────────────────────────────────
+  // ── Pagination ──
   let page = $state(0);
   const perPage = 100;
-
-  let pageRows = $derived(
-    filteredRows.slice(page * perPage, (page + 1) * perPage)
-  );
-
+  let pageRows = $derived(filteredRows.slice(page * perPage, (page + 1) * perPage));
   let totalPages = $derived(Math.ceil(filteredRows.length / perPage));
 
-  // Reset page when search changes
   $effect(() => { search; page = 0; });
 
-  // ── Sort handler ──────────────────────────────────────────────────────────
   function toggleSort(key) {
-    if (sortCol === key) {
-      sortAsc = !sortAsc;
-    } else {
-      sortCol = key;
-      sortAsc = true;
-    }
+    if (key === '_color') return;
+    if (sortCol === key) { sortAsc = !sortAsc; }
+    else { sortCol = key; sortAsc = true; }
   }
 
-  // ── CSV export ────────────────────────────────────────────────────────────
   function exportCsv() {
-    const header = cols.map(c => c.label).join(',');
+    const exportCols = cols.filter(c => c.key !== '_color');
+    const header = exportCols.map(c => c.label).join(',');
     const body = filteredRows.map(r =>
-      cols.map(c => {
+      exportCols.map(c => {
         const v = r[c.key] ?? '';
-        // Quote strings that contain commas
         return String(v).includes(',') ? `"${v}"` : v;
       }).join(',')
     ).join('\n');
-
     const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeTable}.csv`;
-    a.click();
+    a.href = url; a.download = `${activeTable}.csv`; a.click();
     URL.revokeObjectURL(url);
   }
 </script>
 
 <div class="flex h-full flex-col overflow-hidden p-4">
-  <!-- Header bar -->
   <div class="mb-4 flex flex-wrap items-center gap-3">
-    <!-- Table selector -->
     <div class="flex rounded-lg border border-slate-700 bg-slate-800">
       <button
         class="px-4 py-1.5 text-sm font-medium transition-colors rounded-l-lg
@@ -122,52 +202,49 @@
       >Samples</button>
     </div>
 
-    <!-- Search -->
     <input
-      type="text"
-      bind:value={search}
-      placeholder="Search..."
+      type="text" bind:value={search} placeholder="Search..."
       class="rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none w-64"
     />
 
-    <span class="text-xs text-slate-500">
-      {filteredRows.length} rows
-    </span>
+    <span class="text-xs text-slate-500">{filteredRows.length} rows</span>
 
     <button
       class="ml-auto rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-slate-100 transition-colors"
       onclick={exportCsv}
-    >
-      Export CSV
-    </button>
+    >Export CSV</button>
   </div>
 
-  <!-- Table -->
   <div class="flex-1 overflow-auto rounded-lg border border-slate-800">
     <table class="w-full text-sm">
       <thead class="sticky top-0 z-10 bg-slate-900 text-left">
         <tr>
           {#each cols as col}
             <th
-              class="cursor-pointer select-none border-b border-slate-800 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition-colors"
+              class="cursor-pointer select-none border-b border-slate-800 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition-colors"
+              style={col.width ? `width:${col.width}` : ''}
               onclick={() => toggleSort(col.key)}
             >
-              <span class="inline-flex items-center gap-1">
-                {col.label}
-                {#if sortCol === col.key}
-                  <span class="text-blue-400">{sortAsc ? '▲' : '▼'}</span>
-                {/if}
-              </span>
+              {#if col.key !== '_color'}
+                <span class="inline-flex items-center gap-1">
+                  {col.label}
+                  {#if sortCol === col.key}
+                    <span class="text-blue-400">{sortAsc ? '▲' : '▼'}</span>
+                  {/if}
+                </span>
+              {/if}
             </th>
           {/each}
         </tr>
       </thead>
       <tbody>
-        {#each pageRows as row, i}
+        {#each pageRows as row}
           <tr class="border-t border-slate-800/50 hover:bg-slate-800/30 transition-colors">
             {#each cols as col}
-              <td class="px-4 py-2 text-slate-300 {col.numeric ? 'text-right font-mono' : ''}">
-                {#if col.key === 'group' && row[col.key]}
+              <td class="px-3 py-1.5 text-slate-300 {col.numeric ? 'text-right font-mono' : ''}">
+                {#if col.key === '_color'}
+                  <span class="inline-block h-3 w-3 rounded-full" style="background:{row._color}"></span>
+                {:else if col.key === 'group' && row[col.key]}
                   <span class="inline-flex items-center gap-1.5 capitalize">
                     <span class="inline-block h-2 w-2 rounded-full" style="background:{GROUP_HEX[row[col.key]] ?? '#888'}"></span>
                     {row[col.key]}
@@ -175,7 +252,7 @@
                 {:else if col.numeric}
                   {(row[col.key] ?? 0).toLocaleString()}
                 {:else}
-                  <span class="max-w-md truncate block">{row[col.key] ?? ''}</span>
+                  <span class="max-w-xs truncate block text-xs">{row[col.key] ?? ''}</span>
                 {/if}
               </td>
             {/each}
@@ -193,22 +270,13 @@
     </table>
   </div>
 
-  <!-- Pagination -->
   {#if totalPages > 1}
     <div class="mt-3 flex items-center justify-center gap-2">
-      <button
-        class="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
-        disabled={page === 0}
-        onclick={() => page--}
-      >Prev</button>
-      <span class="text-xs text-slate-500">
-        Page {page + 1} / {totalPages}
-      </span>
-      <button
-        class="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
-        disabled={page >= totalPages - 1}
-        onclick={() => page++}
-      >Next</button>
+      <button class="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
+        disabled={page === 0} onclick={() => page--}>Prev</button>
+      <span class="text-xs text-slate-500">Page {page + 1} / {totalPages}</span>
+      <button class="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
+        disabled={page >= totalPages - 1} onclick={() => page++}>Next</button>
     </div>
   {/if}
 </div>
