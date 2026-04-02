@@ -50,6 +50,8 @@
       showLabels: true,
       showLeafLabels: true,
       showShapes: true,
+      styleLeafLabels: true,
+      styleNodeEdges: true,
       fontSize: 12,
       nodeSize: 6,
       lineWidth: 1,
@@ -137,20 +139,26 @@
     };
   });
 
+  let prevStyleCount = 0;
+
   $effect(() => {
     const _deps = [newick, treeType, styles, collapsedIds];
     if (!container || !newick) return;
 
-    if (!tree || newick !== prevNewick) {
+    const styleCount = Object.keys(styles).length;
+    const needsRebuild = !tree || newick !== prevNewick ||
+      (styleCount > 0 && prevStyleCount === 0);  // styles arrived after initial empty render
+
+    if (needsRebuild) {
       createTree();
+      prevStyleCount = styleCount;
     } else {
-      // Don't pass selectedIds here — Phylocanvas manages selection internally
-      // via clicks; pushing [] would clear the highlight on every re-render.
       tree.setProps({
         type: treeType,
         styles,
         collapsedIds,
       });
+      prevStyleCount = styleCount;
     }
   });
 </script>
