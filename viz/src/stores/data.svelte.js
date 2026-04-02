@@ -14,6 +14,7 @@ export const store = $state({
   network: { edges: [] },
   taxonomy: {},
   treeNewick: '',
+  heatmap: null,
 
   // Selection
   selectedSample: null,
@@ -245,6 +246,25 @@ export function hexToRegl(hex) {
   return [r, g, b, 0.8];
 }
 
+/**
+ * Get color for a sample or ASV based on cluster assignment.
+ * mode: 'sampleCluster' or 'asvCluster'
+ */
+export function getClusterColor(id, mode, k) {
+  const heatmap = store.heatmap;
+  if (!heatmap) return '#475569';
+
+  const clusters = mode === 'sampleCluster'
+    ? heatmap.sampleClusters?.[String(k)]
+    : heatmap.asvClusters?.[String(k)];
+
+  if (!clusters || !(id in clusters)) return '#475569';
+
+  const cid = clusters[id];
+  const hue = ((cid - 1) * 137.508) % 360;
+  return `hsl(${hue}, 70%, 55%)`;
+}
+
 /** Convert hex to phylocanvas RGBA [0-255] */
 export function hexToRgba255(hex) {
   if (!hex || hex[0] !== '#') return [71, 85, 105, 255];
@@ -306,6 +326,12 @@ export async function loadData() {
     store.network = network;
     store.taxonomy = taxonomy;
     store.treeNewick = treeNewick.trim();
+
+    // Load heatmap data (async, non-blocking)
+    fetch('/data/heatmap.json.gz')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) store.heatmap = d; })
+      .catch(() => {});
   } catch (e) {
     store.error = e.message;
     console.error('[microscape] Data load failed:', e);

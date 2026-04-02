@@ -4,6 +4,11 @@
 
   let { activeTab = 'samples', filters = $bindable({}) } = $props();
 
+  function generateClusterColor(id, total) {
+    const hue = ((id - 1) * 137.508) % 360;
+    return `hsl(${hue}, 70%, 55%)`;
+  }
+
   // When user picks from autocomplete, navigate to that taxon's level
   function navigateToTaxon(name) {
     if (!name || name === 'unclassified' || filters.colorMode !== 'taxonomy') return;
@@ -80,10 +85,50 @@
             onchange={() => { filters.navStack = []; filters.taxonFilter = ''; }}>
             <option value="taxonomy">Taxonomy</option>
             <option value="group">Group (broad)</option>
+            {#if store.heatmap?.sampleClusters}
+              <option value="sampleCluster">Sample Cluster</option>
+            {/if}
+            {#if store.heatmap?.asvClusters}
+              <option value="asvCluster">ASV Cluster</option>
+            {/if}
           </select>
         </label>
 
-        {#if filters.colorMode === 'group'}
+        {#if filters.colorMode === 'sampleCluster' && store.heatmap?.sampleClusters}
+          <label class="block">
+            <span class="text-xs text-slate-400">Sample clusters (k): {filters.sampleClusterK}</span>
+            <input type="range" min="2" max={Math.max(2, ...Object.keys(store.heatmap.sampleClusters).map(Number))}
+              step="1" bind:value={filters.sampleClusterK} class="mt-1 w-full accent-blue-500" />
+          </label>
+          {@const clusters = store.heatmap.sampleClusters[String(filters.sampleClusterK)] || {}}
+          {@const clusterIds = [...new Set(Object.values(clusters))].sort((a, b) => a - b)}
+          <div class="space-y-0.5 max-h-32 overflow-y-auto">
+            {#each clusterIds as cid}
+              {@const count = Object.values(clusters).filter(v => v === cid).length}
+              <div class="flex items-center gap-1.5 text-xs px-1 py-0.5">
+                <span class="inline-block h-2 w-2 rounded-full" style="background:{generateClusterColor(cid, clusterIds.length)}"></span>
+                Cluster {cid} ({count} samples)
+              </div>
+            {/each}
+          </div>
+        {:else if filters.colorMode === 'asvCluster' && store.heatmap?.asvClusters}
+          <label class="block">
+            <span class="text-xs text-slate-400">ASV clusters (k): {filters.asvClusterK}</span>
+            <input type="range" min="2" max={Math.max(2, ...Object.keys(store.heatmap.asvClusters).map(Number))}
+              step="1" bind:value={filters.asvClusterK} class="mt-1 w-full accent-blue-500" />
+          </label>
+          {@const clusters = store.heatmap.asvClusters[String(filters.asvClusterK)] || {}}
+          {@const clusterIds = [...new Set(Object.values(clusters))].sort((a, b) => a - b)}
+          <div class="space-y-0.5 max-h-32 overflow-y-auto">
+            {#each clusterIds as cid}
+              {@const count = Object.values(clusters).filter(v => v === cid).length}
+              <div class="flex items-center gap-1.5 text-xs px-1 py-0.5">
+                <span class="inline-block h-2 w-2 rounded-full" style="background:{generateClusterColor(cid, clusterIds.length)}"></span>
+                Cluster {cid} ({count} ASVs)
+              </div>
+            {/each}
+          </div>
+        {:else if filters.colorMode === 'group'}
           <fieldset class="space-y-1">
             <legend class="text-xs text-slate-400">Groups</legend>
             {#each Object.keys(filters.groupFlags || {}) as group}

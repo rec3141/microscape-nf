@@ -3,7 +3,7 @@
   import {
     store,
     GROUP_COLORS, GROUP_HEX,
-    buildTaxColorMap, getAsvColor, getEffectiveColorLevel, hexToRgba255,
+    buildTaxColorMap, getAsvColor, getEffectiveColorLevel, getClusterColor, hexToRgba255,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -200,7 +200,9 @@
       }
 
       let hex;
-      if (cmap) {
+      if (filters.colorMode === 'asvCluster') {
+        hex = getClusterColor(id, 'asvCluster', filters.asvClusterK);
+      } else if (cmap) {
         hex = getAsvColor(id, effectiveColorLevel, cmap);
       } else {
         hex = GROUP_HEX[asv.group] || GROUP_HEX.unknown;

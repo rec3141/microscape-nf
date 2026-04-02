@@ -15,7 +15,9 @@
   let filters = $state({
     // Taxonomy (shared across all views)
     taxonFilter: '',
-    colorMode: 'taxonomy',     // 'taxonomy' or 'group'
+    colorMode: 'taxonomy',     // 'taxonomy', 'group', 'sampleCluster', 'asvCluster'
+    sampleClusterK: 4,
+    asvClusterK: 4,
     colorByLevel: 'Domain',    // current taxonomy nav level
     navStack: [],              // breadcrumb trail for drill-down navigation
     groupFlags: {

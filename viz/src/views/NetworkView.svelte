@@ -4,7 +4,7 @@
   import {
     store, countsBySample,
     GROUP_HEX,
-    buildTaxColorMap, getAsvColor, getEffectiveColorLevel,
+    buildTaxColorMap, getAsvColor, getEffectiveColorLevel, getClusterColor,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -40,6 +40,8 @@
     const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap : null;
 
     const colors = filteredAsvs.map(a => {
+      if (filters.colorMode === 'asvCluster') return getClusterColor(a.id, 'asvCluster', filters.asvClusterK);
+      if (filters.colorMode === 'sampleCluster') return GROUP_HEX[a.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
       if (cmap) return getAsvColor(a.id, colorLevel, cmap);
       return GROUP_HEX[a.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
     });

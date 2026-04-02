@@ -487,7 +487,7 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
     Returns dict with: z, sampleIds, asvIds, rowDendro, colDendro, colColors
     """
     from scipy.spatial.distance import braycurtis, pdist, squareform
-    from scipy.cluster.hierarchy import linkage, dendrogram, leaves_list
+    from scipy.cluster.hierarchy import linkage, dendrogram, leaves_list, fcluster
 
     log_info("Building heatmap.json.gz")
 
@@ -571,6 +571,25 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
                         break
         asv_labels.append(label)
 
+    # Pre-compute cluster assignments for k=2..max_k
+    max_k = min(20, len(samples))
+    sample_clusters = {}  # k -> {sampleId: clusterIdx}
+    if len(samples) > 1:
+        for k in range(2, max_k + 1):
+            labels = fcluster(row_link, k, criterion='maxclust')
+            sample_clusters[str(k)] = {
+                samples[i]: int(labels[i]) for i in range(len(samples))
+            }
+
+    max_k_asv = min(20, len(seqs))
+    asv_clusters = {}  # k -> {asvId: clusterIdx}
+    if len(seqs) > 1:
+        for k in range(2, max_k_asv + 1):
+            labels = fcluster(col_link, k, criterion='maxclust')
+            asv_clusters[str(k)] = {
+                asv_ids[i]: int(labels[i]) for i in range(len(seqs))
+            }
+
     result = {
         'z': ordered_z,
         'sampleIds': ordered_samples,
@@ -578,11 +597,14 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
         'asvLabels': asv_labels,
         'rowDendro': row_dendro_data,
         'colDendro': col_dendro_data,
+        'sampleClusters': sample_clusters,
+        'asvClusters': asv_clusters,
         'nSamples': len(samples),
         'nAsvs': len(seqs),
     }
 
-    log_info(f"  heatmap: {len(ordered_samples)} samples x {len(ordered_asvs)} ASVs")
+    log_info(f"  heatmap: {len(ordered_samples)} samples x {len(ordered_asvs)} ASVs, "
+             f"cluster cuts k=2..{max_k}")
     return result
 
 

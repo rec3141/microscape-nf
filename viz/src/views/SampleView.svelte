@@ -4,7 +4,7 @@
   import {
     store, countsBySample,
     GROUP_HEX,
-    buildTaxColorMap, getAsvColor, getEffectiveColorLevel,
+    buildTaxColorMap, getAsvColor, getEffectiveColorLevel, getClusterColor,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -115,7 +115,11 @@
 
         const proportion = count / totalCount;
         let color;
-        if (cmap) {
+        if (filters.colorMode === 'sampleCluster') {
+          color = getClusterColor(sample.id, 'sampleCluster', filters.sampleClusterK);
+        } else if (filters.colorMode === 'asvCluster') {
+          color = getClusterColor(asv.id, 'asvCluster', filters.asvClusterK);
+        } else if (cmap) {
           color = getAsvColor(asv.id, colorLevel, cmap);
         } else {
           color = GROUP_HEX[group] ?? GROUP_HEX.unknown;
