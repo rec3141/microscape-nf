@@ -265,7 +265,6 @@
               <tr>
                 <th class="py-1 pr-4">ASV</th>
                 <th class="py-1 pr-4">Taxonomy</th>
-                <th class="py-1 pr-4">Group</th>
                 <th class="py-1 pr-4 text-right">Reads</th>
                 <th class="py-1 text-right">%</th>
               </tr>
