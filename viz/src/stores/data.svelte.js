@@ -50,8 +50,9 @@ export const GROUP_HEX = {
 function generatePalette(n) {
   const colors = [];
   const golden = 137.508;
+  const startHue = 120;  // start at green
   for (let i = 0; i < n; i++) {
-    const h = (i * golden) % 360;
+    const h = (startHue + i * golden) % 360;
     const s = 55 + (i % 3) * 15;  // 55-85% saturation
     const l = 45 + (i % 4) * 8;   // 45-69% lightness
     colors.push(`hsl(${h}, ${s}%, ${l}%)`);
