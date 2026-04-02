@@ -103,38 +103,43 @@
     const lines = [];
     let leafIdx = 0;
 
-    function layout(node) {
+    // First pass: compute max depth from root to leaves to set total tree height
+    function maxDepth(node) {
+      if (node.children.length === 0) return 0;
+      return Math.max(...node.children.map(c => c.branchLength + maxDepth(c)));
+    }
+
+    const totalH = maxDepth(tree);
+
+    // Layout: each node gets a position (leaf index) and absolute height from root
+    function layout(node, depthFromRoot) {
       if (node.children.length === 0) {
         const pos = leafIdx;
         leafIdx++;
-        return { pos, height: 0 };
+        return { pos, depth: depthFromRoot };
       }
 
-      const childResults = node.children.map((c, i) => {
-        const r = layout(c);
-        return { ...r, bl: c.branchLength };
-      });
+      const childResults = node.children.map(c =>
+        layout(c, depthFromRoot + c.branchLength)
+      );
 
-      // Node height = max of (child height + branch length)
-      const h = Math.max(...childResults.map(r => r.height + r.bl));
-
-      // Horizontal bar connecting all children
       const leftPos = childResults[0].pos;
       const rightPos = childResults[childResults.length - 1].pos;
-      lines.push({ x1: leftPos, y1: h, x2: rightPos, y2: h });
 
-      // Vertical drop from horizontal bar down to each child
+      // Horizontal bar at this node's depth
+      lines.push({ x1: leftPos, y1: depthFromRoot, x2: rightPos, y2: depthFromRoot });
+
+      // Vertical drop from this node down to each child
       for (const r of childResults) {
-        const childTop = r.height + r.bl;
-        lines.push({ x1: r.pos, y1: h, x2: r.pos, y2: childTop });
+        lines.push({ x1: r.pos, y1: depthFromRoot, x2: r.pos, y2: r.depth });
       }
 
       const centerPos = (leftPos + rightPos) / 2;
-      return { pos: centerPos, height: h };
+      return { pos: centerPos, depth: depthFromRoot };
     }
 
-    layout(tree);
-    return { lines, nLeaves: leafIdx };
+    layout(tree, 0);
+    return { lines, nLeaves: leafIdx, maxDepth: totalH };
   }
 
   let usePhyloOrder = $derived(filters.heatmapAsvTree === 'phylogeny' && !!store.treeNewick);
@@ -289,19 +294,23 @@
     colDendroSvg.setAttribute('height', COL_DENDRO_H);
 
     if (colDendro._phyloLines) {
-      // NJ tree: line segments format
-      const { lines: dLines, nLeaves } = colDendro._phyloLines;
-      const maxH = Math.max(...dLines.map(l => Math.max(l.y1, l.y2)), 0.001);
+      // NJ tree: line segments format (depth from root: 0=root, maxDepth=leaves)
+      const { lines: dLines, nLeaves, maxDepth: treeMaxD } = colDendro._phyloLines;
+      const nL = Math.max(nLeaves - 1, 1);
+      const pad = 2;
       for (const seg of dLines) {
-        const x1 = (seg.x1 / (nLeaves - 1)) * heatW;
-        const x2 = (seg.x2 / (nLeaves - 1)) * heatW;
-        const y1 = COL_DENDRO_H - (seg.y1 / maxH) * (COL_DENDRO_H - 4);
-        const y2 = COL_DENDRO_H - (seg.y2 / maxH) * (COL_DENDRO_H - 4);
+        // Skip zero-length segments
+        if (seg.x1 === seg.x2 && seg.y1 === seg.y2) continue;
+        const x1 = (seg.x1 / nL) * heatW;
+        const x2 = (seg.x2 / nL) * heatW;
+        // Flip: root at top (y=0), leaves at bottom (y=COL_DENDRO_H)
+        const y1 = pad + (seg.y1 / treeMaxD) * (COL_DENDRO_H - 2 * pad);
+        const y2 = pad + (seg.y2 / treeMaxD) * (COL_DENDRO_H - 2 * pad);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', x1); line.setAttribute('y1', y1);
         line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-        line.setAttribute('stroke', '#475569');
-        line.setAttribute('stroke-width', '0.8');
+        line.setAttribute('stroke', '#64748b');
+        line.setAttribute('stroke-width', '0.5');
         colDendroSvg.appendChild(line);
       }
     } else if (colDendro.icoord?.length > 0) {
