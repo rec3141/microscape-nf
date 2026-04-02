@@ -123,27 +123,29 @@ def main():
     log_info("Pivoting to wide format")
     wide = seqtab.pivot_table(index="sample", columns="sequence", values="count", fill_value=0)
 
-    # Normalize rows to proportions
+    # Normalize rows to proportions, then 4th-root transform
     row_sums = wide.sum(axis=1)
     row_sums = row_sums.replace(0, 1)  # avoid division by zero
     prop_matrix = wide.div(row_sums, axis=0)
+    transformed = prop_matrix.apply(lambda x: np.power(x, 0.25))
 
     sample_labels = list(prop_matrix.index)
     seq_labels = list(prop_matrix.columns)
 
     log_info(f"Proportional matrix: {prop_matrix.shape[0]} samples x {prop_matrix.shape[1]} sequences")
+    log_info("Applied 4th-root transformation for ordination")
 
-    # --- Sample ordination ---
+    # --- Sample ordination (on 4th-root transformed proportions) ---
     log_info("Computing Bray-Curtis distances for samples")
-    sample_dist = compute_bray_curtis_matrix(prop_matrix.values)
+    sample_dist = compute_bray_curtis_matrix(transformed.values)
     sample_dist_df = pd.DataFrame(sample_dist, index=sample_labels, columns=sample_labels)
 
     sample_tsne_df = run_ordination(sample_dist, sample_labels, "Samples", n_cpus)
 
-    # --- ASV ordination (transpose) ---
+    # --- ASV ordination (transpose of 4th-root transformed proportions) ---
     log_info("Computing Bray-Curtis distances for ASVs")
-    prop_matrix_t = prop_matrix.T
-    seq_dist = compute_bray_curtis_matrix(prop_matrix_t.values)
+    transformed_t = transformed.T
+    seq_dist = compute_bray_curtis_matrix(transformed_t.values)
     seq_dist_df = pd.DataFrame(seq_dist, index=seq_labels, columns=seq_labels)
 
     seq_tsne_df = run_ordination(seq_dist, seq_labels, "ASVs", n_cpus)
