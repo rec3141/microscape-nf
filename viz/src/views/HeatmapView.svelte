@@ -297,12 +297,12 @@
       // NJ tree: line segments format (depth from root: 0=root, maxDepth=leaves)
       const { lines: dLines, nLeaves, maxDepth: treeMaxD } = colDendro._phyloLines;
       const nL = Math.max(nLeaves - 1, 1);
+      const halfCell = cellW / 2;
       const pad = 2;
       for (const seg of dLines) {
-        // Skip zero-length segments
         if (seg.x1 === seg.x2 && seg.y1 === seg.y2) continue;
-        const x1 = (seg.x1 / nL) * heatW;
-        const x2 = (seg.x2 / nL) * heatW;
+        const x1 = (seg.x1 / nL) * (heatW - cellW) + halfCell;
+        const x2 = (seg.x2 / nL) * (heatW - cellW) + halfCell;
         // Flip: root at top (y=0), leaves at bottom (y=COL_DENDRO_H)
         const y1 = pad + (seg.y1 / treeMaxD) * (COL_DENDRO_H - 2 * pad);
         const y2 = pad + (seg.y2 / treeMaxD) * (COL_DENDRO_H - 2 * pad);
@@ -321,7 +321,7 @@
         const iy = colDendro.dcoord[i];
         const points = [];
         for (let j = 0; j < 4; j++) {
-          const px = ((ix[j] - 5) / (nCols * 10 - 10)) * heatW;
+          const px = ((ix[j] - 5) / (nCols * 10 - 10)) * (heatW - cellW) + cellW / 2;
           const py = COL_DENDRO_H - (iy[j] / maxDist) * (COL_DENDRO_H - 4);
           points.push(`${px},${py}`);
         }
@@ -346,7 +346,7 @@
         const iy = rowDendro.dcoord[i];
         const points = [];
         for (let j = 0; j < 4; j++) {
-          const py = ((ix[j] - 5) / (nRows * 10 - 10)) * heatH;
+          const py = ((ix[j] - 5) / (nRows * 10 - 10)) * (heatH - cellH) + cellH / 2;
           const px = ROW_DENDRO_W - (iy[j] / maxDist) * (ROW_DENDRO_W - 4);
           points.push(`${px},${py}`);
         }
