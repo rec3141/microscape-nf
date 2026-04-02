@@ -9,31 +9,13 @@
   let hasPlot = false;
   let heatmapData = $state(null);
 
-  // Load heatmap data
   onMount(async () => {
     try {
-      const res = await fetch('/data/heatmap.json.gz');
+      // Try .gz first (browser may auto-decompress via Content-Encoding)
+      let res = await fetch('/data/heatmap.json.gz');
+      if (!res.ok) res = await fetch('/data/heatmap.json');
       if (res.ok) {
-        const buf = await res.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let text;
-        if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-          const ds = new DecompressionStream('gzip');
-          const reader = new Blob([buf]).stream().pipeThrough(ds).getReader();
-          const chunks = [];
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-          }
-          const combined = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
-          let offset = 0;
-          for (const c of chunks) { combined.set(c, offset); offset += c.length; }
-          text = new TextDecoder().decode(combined);
-        } else {
-          text = new TextDecoder().decode(buf);
-        }
-        heatmapData = JSON.parse(text);
+        heatmapData = await res.json();
       }
     } catch (e) {
       console.error('Failed to load heatmap data:', e);
