@@ -36,15 +36,25 @@
     return `rgb(${r},${g},${b})`;
   }
 
+  // Viridis sampled at 9 stops, linearly interpolated to 256
+  const VIRIDIS_STOPS = [
+    [68, 1, 84], [72, 35, 116], [64, 67, 135], [52, 94, 141],
+    [33, 145, 140], [53, 183, 121], [109, 205, 89], [180, 222, 44], [253, 231, 37],
+  ];
+
   function buildViridisLUT() {
     const lut = [];
+    const nStops = VIRIDIS_STOPS.length;
     for (let i = 0; i < 256; i++) {
-      const t = i / 255;
-      // Proper viridis approximation
-      const r = Math.round(255 * Math.max(0, Math.min(1, 0.267 + t * (0.004 + t * (3.312 + t * (-7.776 + t * 5.198))))));
-      const g = Math.round(255 * Math.max(0, Math.min(1, 0.004 + t * (0.873 + t * (0.682 + t * (-2.988 + t * 2.438))))));
-      const b = Math.round(255 * Math.max(0, Math.min(1, 0.329 + t * (1.409 + t * (-4.967 + t * (6.368 + t * (-2.632)))))));
-      lut.push([r, g, b]);
+      const t = i / 255 * (nStops - 1);
+      const lo = Math.floor(t);
+      const hi = Math.min(lo + 1, nStops - 1);
+      const f = t - lo;
+      lut.push([
+        Math.round(VIRIDIS_STOPS[lo][0] * (1 - f) + VIRIDIS_STOPS[hi][0] * f),
+        Math.round(VIRIDIS_STOPS[lo][1] * (1 - f) + VIRIDIS_STOPS[hi][1] * f),
+        Math.round(VIRIDIS_STOPS[lo][2] * (1 - f) + VIRIDIS_STOPS[hi][2] * f),
+      ]);
     }
     return lut;
   }
