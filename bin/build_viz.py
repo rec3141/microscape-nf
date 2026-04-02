@@ -243,6 +243,8 @@ def build_asvs(seqtab, seq_tsne, renorm_table_list, taxonomy_dict):
         records.append(rec)
         asv_id_list.append(asv_id)
 
+    # Sort by ASV ID so ASV_000001 (most abundant) is first
+    records.sort(key=lambda r: r["id"])
     log_info(f"asvs.json: {len(records)} ASVs")
     return records, seq_to_id
 
