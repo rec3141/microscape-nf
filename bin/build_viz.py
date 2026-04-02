@@ -478,6 +478,115 @@ def load_taxonomy_dir(taxonomy_dir):
 
 
 # ---------------------------------------------------------------------------
+# Build heatmap.json.gz — pre-clustered matrix with dendrogram coordinates
+# ---------------------------------------------------------------------------
+
+def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
+    """Build clustered heatmap data with scipy dendrograms.
+
+    Returns dict with: z, sampleIds, asvIds, rowDendro, colDendro, colColors
+    """
+    from scipy.spatial.distance import braycurtis, pdist, squareform
+    from scipy.cluster.hierarchy import linkage, dendrogram, leaves_list
+
+    log_info("Building heatmap.json.gz")
+
+    # Build wide matrix: samples x ASVs (4th-root relative abundance)
+    samples = sorted(seqtab["sample"].unique())
+    seqs = sorted(seq_to_id.keys(), key=lambda s: seq_to_id[s])
+    asv_ids = [seq_to_id[s] for s in seqs]
+
+    sample_idx = {s: i for i, s in enumerate(samples)}
+    seq_idx = {s: i for i, s in enumerate(seqs)}
+
+    mat = np.zeros((len(samples), len(seqs)))
+    for _, row in seqtab.iterrows():
+        si = sample_idx.get(row["sample"])
+        ji = seq_idx.get(row["sequence"])
+        if si is not None and ji is not None:
+            mat[si, ji] = row["count"]
+
+    # Convert to relative abundance, then 4th root
+    row_sums = mat.sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1
+    rel = mat / row_sums
+    transformed = np.power(rel, 0.25)
+
+    # Cluster rows (samples) by Bray-Curtis
+    if len(samples) > 1:
+        row_dist = pdist(transformed, metric='braycurtis')
+        row_dist = np.nan_to_num(row_dist, nan=1.0)
+        row_link = linkage(row_dist, method='average')
+        row_dendro = dendrogram(row_link, no_plot=True)
+        row_order = row_dendro['leaves']
+        # Extract dendrogram coordinates
+        row_dendro_data = {
+            'icoord': [list(map(float, x)) for x in row_dendro['icoord']],
+            'dcoord': [list(map(float, x)) for x in row_dendro['dcoord']],
+        }
+    else:
+        row_order = [0]
+        row_dendro_data = {'icoord': [], 'dcoord': []}
+
+    # Cluster columns (ASVs) by Bray-Curtis on transposed matrix
+    if len(seqs) > 1:
+        col_dist = pdist(transformed.T, metric='braycurtis')
+        col_dist = np.nan_to_num(col_dist, nan=1.0)
+        col_link = linkage(col_dist, method='average')
+        col_dendro = dendrogram(col_link, no_plot=True)
+        col_order = col_dendro['leaves']
+        col_dendro_data = {
+            'icoord': [list(map(float, x)) for x in col_dendro['icoord']],
+            'dcoord': [list(map(float, x)) for x in col_dendro['dcoord']],
+        }
+    else:
+        col_order = [0]
+        col_dendro_data = {'icoord': [], 'dcoord': []}
+
+    # Reorder matrix
+    ordered_z = transformed[np.ix_(row_order, col_order)].tolist()
+    ordered_samples = [samples[i] for i in row_order]
+    ordered_asvs = [asv_ids[i] for i in col_order]
+
+    # ASV labels (deepest taxonomy)
+    asv_labels = []
+    db = next(iter(taxonomy_dict), None)
+    tax_data = taxonomy_dict.get(db, {}) if db else {}
+    tax_df = tax_data.get("tax") if isinstance(tax_data, dict) else None
+
+    for asv_id in ordered_asvs:
+        label = asv_id
+        if tax_df is not None and isinstance(tax_df, pd.DataFrame):
+            # Find the sequence for this ASV ID
+            seq = None
+            for s, aid in seq_to_id.items():
+                if aid == asv_id:
+                    seq = s
+                    break
+            if seq and seq in tax_df.index:
+                vals = tax_df.loc[seq]
+                for v in reversed(list(vals)):
+                    if pd.notna(v) and v:
+                        label = str(v)
+                        break
+        asv_labels.append(label)
+
+    result = {
+        'z': ordered_z,
+        'sampleIds': ordered_samples,
+        'asvIds': ordered_asvs,
+        'asvLabels': asv_labels,
+        'rowDendro': row_dendro_data,
+        'colDendro': col_dendro_data,
+        'nSamples': len(samples),
+        'nAsvs': len(seqs),
+    }
+
+    log_info(f"  heatmap: {len(ordered_samples)} samples x {len(ordered_asvs)} ASVs")
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Copy Svelte app
 # ---------------------------------------------------------------------------
 
@@ -605,6 +714,10 @@ def main():
     # renorm_stats.json
     renorm_stats = build_renorm_stats(renorm_data)
     write_json(renorm_stats, "renorm_stats.json")
+
+    # heatmap.json.gz
+    heatmap = build_heatmap(seqtab, seq_to_id, taxonomy_dict)
+    write_json(heatmap, "heatmap.json.gz", compress=True)
 
     # --- Copy Svelte app ---
     copy_svelte_app()
