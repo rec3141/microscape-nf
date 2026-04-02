@@ -10,38 +10,83 @@
 
   let treeType = $derived(filters.treeLayout || 'rc');
 
-  // Prune newick to only include filtered tips
+  // Parse newick into a tree, prune, and re-serialize
   function pruneNewick(nwk, keepIds) {
     if (!nwk || !keepIds.size) return nwk;
-    // Parse tip names from newick, rebuild keeping only matching tips
-    // Simple approach: use regex to find all tip labels and filter
-    const allTips = new Set(nwk.match(/ASV_\d+/g) || []);
-    const removeTips = [...allTips].filter(t => !keepIds.has(t));
-    if (removeTips.length === 0) return nwk;
 
-    // Iteratively remove tips from the newick string
-    let result = nwk;
-    for (const tip of removeTips) {
-      // Remove "tip:branchlen" or "tip" patterns
-      // Pattern: tip followed by optional :number, then , or )
-      result = result.replace(new RegExp(`${tip}:[\\d.eE+-]+`, 'g'), '');
-      result = result.replace(new RegExp(`${tip}(?=[,)])`, 'g'), '');
+    // Parse newick into a tree structure
+    function parse(s) {
+      let pos = 0;
+      function readNode() {
+        const node = { children: [], label: '', branchLength: null };
+        if (s[pos] === '(') {
+          pos++; // skip (
+          node.children.push(readNode());
+          while (s[pos] === ',') {
+            pos++; // skip ,
+            node.children.push(readNode());
+          }
+          pos++; // skip )
+        }
+        // Read label
+        let label = '';
+        while (pos < s.length && s[pos] !== ':' && s[pos] !== ',' && s[pos] !== ')' && s[pos] !== ';') {
+          label += s[pos++];
+        }
+        node.label = label;
+        // Read branch length
+        if (pos < s.length && s[pos] === ':') {
+          pos++; // skip :
+          let bl = '';
+          while (pos < s.length && s[pos] !== ',' && s[pos] !== ')' && s[pos] !== ';') {
+            bl += s[pos++];
+          }
+          node.branchLength = parseFloat(bl);
+        }
+        return node;
+      }
+      const tree = readNode();
+      return tree;
     }
-    // Clean up empty clades: (,) -> () -> remove
-    for (let i = 0; i < 20; i++) {
-      const prev = result;
-      result = result.replace(/\(,/g, '(');
-      result = result.replace(/,\)/g, ')');
-      result = result.replace(/,,+/g, ',');
-      result = result.replace(/\(\)/g, '');
-      result = result.replace(/\([^(),]+:[^(),]*\)(?:Inner\d*)?:[^(),]*/g, (m) => {
-        // Single-child internal node — unwrap
-        const inner = m.match(/\(([^()]+)\)/);
-        return inner ? inner[1] : m;
-      });
-      if (result === prev) break;
+
+    // Prune: remove tips not in keepIds, collapse single-child internals
+    function prune(node) {
+      if (node.children.length === 0) {
+        // Leaf: keep only if in keepIds
+        return keepIds.has(node.label) ? node : null;
+      }
+      // Recurse
+      node.children = node.children.map(prune).filter(Boolean);
+      if (node.children.length === 0) return null;
+      if (node.children.length === 1) {
+        // Single child: merge branch lengths
+        const child = node.children[0];
+        if (node.branchLength != null && child.branchLength != null) {
+          child.branchLength += node.branchLength;
+        }
+        return child;
+      }
+      return node;
     }
-    return result;
+
+    // Serialize back to newick
+    function toNewick(node) {
+      if (node.children.length === 0) {
+        return node.label + (node.branchLength != null ? ':' + node.branchLength : '');
+      }
+      const inner = node.children.map(toNewick).join(',');
+      const bl = node.branchLength != null ? ':' + node.branchLength : '';
+      return `(${inner})${node.label}${bl}`;
+    }
+
+    try {
+      const tree = parse(nwk);
+      const pruned = prune(tree);
+      if (!pruned) return nwk;
+      return toNewick(pruned) + ';';
+    } catch {
+      return nwk;
+    }
   }
 
   let displayNewick = $derived.by(() => {
