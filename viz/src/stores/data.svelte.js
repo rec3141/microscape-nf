@@ -13,7 +13,8 @@ export const store = $state({
   counts: { data: [], samples: [], asvs: [] },
   network: { edges: [] },
   taxonomy: {},
-  treeNewick: '',
+  treeNewick: '',      // phylogeny (NJ) tree
+  heatmapNewick: '',   // Ward clustering tree (from heatmap data)
   heatmap: null,
 
   // Selection
@@ -330,7 +331,12 @@ export async function loadData() {
     // Load heatmap data (async, non-blocking)
     fetch('/data/heatmap.json.gz')
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) store.heatmap = d; })
+      .then(d => {
+        if (d) {
+          store.heatmap = d;
+          if (d.asvWardNewick) store.heatmapNewick = d.asvWardNewick;
+        }
+      })
       .catch(() => {});
   } catch (e) {
     store.error = e.message;

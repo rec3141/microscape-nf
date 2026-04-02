@@ -268,6 +268,16 @@
       {#if sections.phylogeny}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
+            <span class="text-xs text-slate-400">Tree</span>
+            <select bind:value={filters.treeSource} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
+              <option value="phylogeny">Phylogeny (NJ)</option>
+              {#if store.heatmapNewick}
+                <option value="ward">Ward Clustering</option>
+              {/if}
+            </select>
+          </label>
+
+          <label class="block">
             <span class="text-xs text-slate-400">Layout</span>
             <select bind:value={filters.treeLayout} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
               <option value="rc">Rectangular</option>

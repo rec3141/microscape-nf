@@ -487,7 +487,7 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
     Returns dict with: z, sampleIds, asvIds, rowDendro, colDendro, colColors
     """
     from scipy.spatial.distance import braycurtis, pdist, squareform
-    from scipy.cluster.hierarchy import linkage, dendrogram, leaves_list, fcluster
+    from scipy.cluster.hierarchy import linkage, dendrogram, leaves_list, fcluster, to_tree
 
     log_info("Building heatmap.json.gz")
 
@@ -590,6 +590,22 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
                 asv_ids[i]: int(labels[i]) for i in range(len(seqs))
             }
 
+    # Convert ASV linkage to Newick for the Ward tree view
+    def linkage_to_newick(Z, labels):
+        """Convert scipy linkage matrix to Newick string."""
+        root = to_tree(Z)
+        def _to_nwk(node):
+            if node.is_leaf():
+                return f"{labels[node.id]}:{node.dist:.6f}"
+            left = _to_nwk(node.get_left())
+            right = _to_nwk(node.get_right())
+            return f"({left},{right}):{node.dist:.6f}"
+        return _to_nwk(root) + ";"
+
+    asv_ward_newick = ''
+    if len(seqs) > 1:
+        asv_ward_newick = linkage_to_newick(col_link, asv_ids)
+
     result = {
         'z': ordered_z,
         'sampleIds': ordered_samples,
@@ -599,6 +615,7 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
         'colDendro': col_dendro_data,
         'sampleClusters': sample_clusters,
         'asvClusters': asv_clusters,
+        'asvWardNewick': asv_ward_newick,
         'nSamples': len(samples),
         'nAsvs': len(seqs),
     }
