@@ -213,8 +213,11 @@
 
           {#if activeTab === 'samples'}
             <label class="block">
-              <span class="text-xs text-slate-400">Point scale: {(filters.pointScale ?? 20).toFixed(0)}x</span>
-              <input type="range" min="1" max="40" step="1" bind:value={filters.pointScale} class="mt-1 w-full accent-blue-500" />
+              <span class="text-xs text-slate-400">Point scale: {Math.round(filters.pointScale ?? 20)}x</span>
+              <input type="range" min="0" max="100" step="1"
+                value={Math.round(Math.log(filters.pointScale ?? 20) / Math.log(200) * 100)}
+                oninput={(e) => { filters.pointScale = Math.pow(200, +e.target.value / 100); }}
+                class="mt-1 w-full accent-blue-500" />
             </label>
           {/if}
         </div>
@@ -250,8 +253,11 @@
 
           {#if activeTab === 'network'}
             <label class="block">
-              <span class="text-xs text-slate-400">ASV point scale: {(filters.networkPointScale ?? 10).toFixed(0)}x</span>
-              <input type="range" min="1" max="20" step="1" bind:value={filters.networkPointScale} class="mt-1 w-full accent-blue-500" />
+              <span class="text-xs text-slate-400">ASV point scale: {Math.round(filters.networkPointScale ?? 10)}x</span>
+              <input type="range" min="0" max="100" step="1"
+                value={Math.round(Math.log(filters.networkPointScale ?? 10) / Math.log(200) * 100)}
+                oninput={(e) => { filters.networkPointScale = Math.pow(200, +e.target.value / 100); }}
+                class="mt-1 w-full accent-blue-500" />
             </label>
           {/if}
         </div>
