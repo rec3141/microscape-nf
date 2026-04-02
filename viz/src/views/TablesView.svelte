@@ -29,22 +29,20 @@
   let asvCols = $derived.by(() => {
     const cols = [
       { key: '_color', label: '', width: '30px' },
-      { key: 'id', label: 'ASV ID' },
+      { key: 'id', label: 'ASV' },
+      { key: 'total_reads', label: 'Reads', numeric: true },
+      { key: 'n_samples', label: 'Prevalence', numeric: true },
     ];
 
-    // Add taxonomy level columns
-    for (const level of taxLevels) {
-      cols.push({ key: `_tax_${level}`, label: level });
+    if (store.heatmap?.asvClusters) {
+      const k = filters.asvClusterK || 4;
+      cols.push({ key: '_asvCluster', label: `Cluster (k=${k})`, numeric: true });
     }
 
     cols.push({ key: 'group', label: 'Group' });
-    cols.push({ key: 'total_reads', label: 'Reads', numeric: true });
-    cols.push({ key: 'n_samples', label: 'Prevalence', numeric: true });
 
-    // Add cluster columns if available
-    if (store.heatmap?.asvClusters) {
-      const k = filters.asvClusterK || 4;
-      cols.push({ key: '_asvCluster', label: `ASV Cluster (k=${k})`, numeric: true });
+    for (const level of taxLevels) {
+      cols.push({ key: `_tax_${level}`, label: level });
     }
 
     return cols;
@@ -156,13 +154,7 @@
     return rows;
   });
 
-  // ── Pagination ──
-  let page = $state(0);
-  const perPage = 100;
-  let pageRows = $derived(filteredRows.slice(page * perPage, (page + 1) * perPage));
-  let totalPages = $derived(Math.ceil(filteredRows.length / perPage));
-
-  $effect(() => { search; page = 0; });
+  let pageRows = $derived(filteredRows);
 
   function toggleSort(key) {
     if (key === '_color') return;
@@ -193,12 +185,12 @@
       <button
         class="px-4 py-1.5 text-sm font-medium transition-colors rounded-l-lg
           {activeTable === 'asvs' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}"
-        onclick={() => { activeTable = 'asvs'; sortCol = null; page = 0; }}
+        onclick={() => { activeTable = 'asvs'; sortCol = null; }}
       >ASVs</button>
       <button
         class="px-4 py-1.5 text-sm font-medium transition-colors rounded-r-lg
           {activeTable === 'samples' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}"
-        onclick={() => { activeTable = 'samples'; sortCol = null; page = 0; }}
+        onclick={() => { activeTable = 'samples'; sortCol = null; }}
       >Samples</button>
     </div>
 
@@ -270,13 +262,4 @@
     </table>
   </div>
 
-  {#if totalPages > 1}
-    <div class="mt-3 flex items-center justify-center gap-2">
-      <button class="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
-        disabled={page === 0} onclick={() => page--}>Prev</button>
-      <span class="text-xs text-slate-500">Page {page + 1} / {totalPages}</span>
-      <button class="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
-        disabled={page >= totalPages - 1} onclick={() => page++}>Next</button>
-    </div>
-  {/if}
 </div>
