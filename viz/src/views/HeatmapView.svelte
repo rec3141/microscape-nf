@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { store, getClusterColor } from '../stores/data.svelte.js';
+  import { store, getClusterColor, GROUP_HEX, buildTaxColorMap, getAsvColor, getEffectiveColorLevel } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
 
@@ -131,26 +131,43 @@
       return [Math.max(0, left), Math.min(n - 1, right)];
     }
 
-    // Get cluster color for a dendrogram segment
-    function segmentColor(icoord, orderedIds, mode, k, n) {
-      if (!mode || !k) return '#64748b';
+    // Get color for an individual leaf
+    const colorLevel = (filters.colorMode === 'taxonomy' || filters.colorMode === undefined)
+      ? getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)
+      : null;
+    const taxCmap = colorLevel && colorLevel !== 'group'
+      ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap
+      : null;
+
+    function leafColor(id, type) {
+      if (filters.colorMode === 'cluster') {
+        const mode = type === 'sample' ? 'sampleCluster' : 'asvCluster';
+        const k = type === 'sample' ? filters.sampleClusterK : filters.asvClusterK;
+        return getClusterColor(id, mode, k);
+      }
+      if (type === 'asv') {
+        if (filters.colorMode === 'group') {
+          const asv = store.asvs.find(a => a.id === id);
+          return GROUP_HEX[asv?.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
+        }
+        if (taxCmap) return getAsvColor(id, colorLevel, taxCmap);
+      }
+      return '#64748b';
+    }
+
+    // Get color for a dendrogram segment — uniform if all leaves share a color
+    function segmentColor(icoord, orderedIds, type, n) {
       const [lo, hi] = segmentLeafRange(icoord, n);
-      let clusterVal = null;
+      let first = null;
       for (let idx = lo; idx <= hi; idx++) {
         const id = orderedIds[idx];
         if (!id) continue;
-        const c = getClusterColor(id, mode, k);
-        if (clusterVal === null) clusterVal = c;
-        else if (c !== clusterVal) return '#64748b';  // mixed clusters
+        const c = leafColor(id, type);
+        if (first === null) first = c;
+        else if (c !== first) return '#64748b';
       }
-      return clusterVal || '#64748b';
+      return first || '#64748b';
     }
-
-    const isCluster = filters.colorMode === 'cluster';
-    const colMode = isCluster ? 'asvCluster' : null;
-    const colK = filters.asvClusterK;
-    const rowMode = isCluster ? 'sampleCluster' : null;
-    const rowK = filters.sampleClusterK;
 
     // ── Draw column dendrogram (SVG, above heatmap) ──
     colDendroSvg.innerHTML = '';
@@ -168,7 +185,7 @@
           const py = COL_DENDRO_H - (iy[j] / maxDist) * (COL_DENDRO_H - 4);
           points.push(`${px},${py}`);
         }
-        const color = segmentColor(ix, asvIds, colMode, colK, nCols);
+        const color = segmentColor(ix, asvIds, 'asv', nCols);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
@@ -194,7 +211,7 @@
           const px = ROW_DENDRO_W - (iy[j] / maxDist) * (ROW_DENDRO_W - 4);
           points.push(`${px},${py}`);
         }
-        const color = segmentColor(ix, sampleIds, rowMode, rowK, nRows);
+        const color = segmentColor(ix, sampleIds, 'sample', nRows);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
