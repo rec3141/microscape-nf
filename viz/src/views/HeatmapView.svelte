@@ -63,10 +63,107 @@
 
   const viridisLUT = buildViridisLUT();
 
+  // ── Newick parser → leaf order + dendrogram coords ──
+  function parseNewick(s) {
+    let pos = 0;
+    function readNode() {
+      const node = { children: [], label: '', branchLength: 0 };
+      if (s[pos] === '(') {
+        pos++;
+        node.children.push(readNode());
+        while (s[pos] === ',') { pos++; node.children.push(readNode()); }
+        pos++; // skip )
+      }
+      let label = '';
+      while (pos < s.length && s[pos] !== ':' && s[pos] !== ',' && s[pos] !== ')' && s[pos] !== ';') {
+        label += s[pos++];
+      }
+      node.label = label;
+      if (pos < s.length && s[pos] === ':') {
+        pos++;
+        let bl = '';
+        while (pos < s.length && s[pos] !== ',' && s[pos] !== ')' && s[pos] !== ';') bl += s[pos++];
+        node.branchLength = parseFloat(bl) || 0;
+      }
+      return node;
+    }
+    return readNode();
+  }
+
+  function getLeaves(node) {
+    if (node.children.length === 0) return [node.label];
+    return node.children.flatMap(getLeaves);
+  }
+
+  // Convert parsed tree to scipy-compatible icoord/dcoord for SVG rendering
+  function treeToDendroCoords(tree) {
+    const icoord = [], dcoord = [];
+    let leafIdx = 0;
+
+    function layout(node) {
+      if (node.children.length === 0) {
+        const pos = leafIdx * 10 + 5; // scipy convention: 5, 15, 25...
+        leafIdx++;
+        return { pos, height: 0 };
+      }
+      const childResults = node.children.map(layout);
+      const leftmost = childResults[0];
+      const rightmost = childResults[childResults.length - 1];
+
+      // Compute node height as max child height + max branch length among children
+      const h = Math.max(...node.children.map((c, i) => childResults[i].height + c.branchLength));
+
+      // Draw U-shape connecting leftmost to rightmost child
+      icoord.push([leftmost.pos, leftmost.pos, rightmost.pos, rightmost.pos]);
+      dcoord.push([childResults[0].height + node.children[0].branchLength, h, h,
+                    childResults[childResults.length - 1].height + node.children[node.children.length - 1].branchLength]);
+
+      const centerPos = (leftmost.pos + rightmost.pos) / 2;
+      return { pos: centerPos, height: h };
+    }
+
+    layout(tree);
+    return { icoord, dcoord };
+  }
+
+  let usePhyloOrder = $derived(filters.heatmapAsvTree === 'phylogeny' && !!store.treeNewick);
+
   $effect(() => {
+    // Track dependencies for reactivity
+    const _phyloOrder = usePhyloOrder;
     if (!heatmapData || !canvas || !rowDendroSvg || !colDendroSvg) return;
 
-    const { z, sampleIds, asvIds, asvLabels, rowDendro, colDendro } = heatmapData;
+    let { z, sampleIds, asvIds, asvLabels, rowDendro, colDendro } = heatmapData;
+
+    // If phylogeny ordering selected, reorder columns by NJ tree leaf order
+    if (usePhyloOrder) {
+      try {
+        const tree = parseNewick(store.treeNewick);
+        const phyloLeaves = getLeaves(tree);
+
+        // Build mapping: asvId → column index in heatmap data
+        const heatmapColIdx = {};
+        asvIds.forEach((id, i) => { heatmapColIdx[id] = i; });
+
+        // Filter to only ASVs present in the heatmap
+        const newOrder = phyloLeaves.filter(id => id in heatmapColIdx);
+
+        if (newOrder.length > 0) {
+          const colMap = newOrder.map(id => heatmapColIdx[id]);
+
+          // Reorder columns
+          z = z.map(row => colMap.map(ci => row[ci]));
+          asvIds = newOrder;
+          asvLabels = colMap.map(ci => heatmapData.asvLabels[ci]);
+
+          // Generate dendrogram from phylogeny
+          colDendro = treeToDendroCoords(tree);
+        }
+      } catch (e) {
+        console.warn('Phylogeny ordering failed:', e);
+      }
+    }
+
     const nRows = z.length;
     const nCols = z[0]?.length || 0;
     if (nRows === 0 || nCols === 0) return;
@@ -306,7 +403,7 @@
 
       <!-- Title -->
       <div class="absolute top-1 left-1/2 -translate-x-1/2 text-xs text-slate-500 pointer-events-none">
-        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs (Bray-Curtis, Ward)
+        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs — {usePhyloOrder ? 'Phylogeny (NJ)' : 'Ward'}
       </div>
 
       <!-- Tooltip -->
