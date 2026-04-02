@@ -53,7 +53,6 @@
       type: 'scattergl',
       marker: {
         size: (() => {
-          // If samples selected, size by abundance in those samples
           const selIds = store.selectedSample != null
             ? new Set([store.samples[store.selectedSample]?.id])
             : filters.lassoSampleIds?.size > 0 ? filters.lassoSampleIds : null;
@@ -68,13 +67,14 @@
             return filteredAsvs.map(a => {
               const idx = store.asvs.indexOf(a);
               const count = asvCounts.get(idx) || 0;
-              const s = filters.networkPointScale ?? 1;
-              return count > 0 ? Math.max(2, Math.log2(count + 1) * 2 * s) : 2;
+              return count > 0 ? Math.log2(count + 1) : 0.1;
             });
           }
-          const s = filters.networkPointScale ?? 1;
-          return filteredAsvs.map(a => Math.max(2, Math.log2((a.total_reads ?? 1) + 1) * 1.5 * s));
+          return filteredAsvs.map(a => Math.log2((a.total_reads ?? 1) + 1));
         })(),
+        sizemode: 'area',
+        sizeref: 0.5 / (filters.networkPointScale ?? 1),
+        sizemin: 1,
         color: colors,
         opacity: 0.7,
       },

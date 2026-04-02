@@ -127,7 +127,7 @@
         allPoints.push({
           x: sample.x,
           y: sample.y,
-          size: Math.max(2, Math.pow(proportion, 0.25) * 15 * scale),
+          size: Math.pow(proportion, 0.25),
           color,
           proportion,
           text: `${sample.id}<br>${(sample.total_reads ?? 0).toLocaleString()} reads | ${sample.n_asvs ?? 0} ASVs`,
@@ -145,6 +145,9 @@
       type: 'scattergl',
       marker: {
         size: allPoints.map(p => p.size),
+        sizemode: 'area',
+        sizeref: 0.5 / scale,
+        sizemin: 1,
         color: allPoints.map(p => p.color),
         opacity: 0.7,
         line: { width: 0 },
