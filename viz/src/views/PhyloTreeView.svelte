@@ -106,8 +106,8 @@
 
       if (!isFiltered) {
         styles[id] = {
-          fillColour: 'rgba(71,85,105,0.2)',
-          fontColour: 'rgba(71,85,105,0.2)',
+          fillColour: '#1e293b',
+          fontColour: '#1e293b',
           shape: 'circle',
           nodeSize: 0.3,
           label,
