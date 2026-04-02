@@ -9,9 +9,6 @@
   let { filters = {} } = $props();
 
   let treeType = $derived(filters.treeLayout || 'rc');
-  let activeNewick = $derived(
-    filters.treeSource === 'ward' ? store.heatmapNewick : store.treeNewick
-  );
 
   // Parse newick into a tree, prune, and re-serialize
   function pruneNewick(nwk, keepIds) {
@@ -93,8 +90,8 @@
   }
 
   let displayNewick = $derived.by(() => {
-    if (!filters.treePrune || filteredAsvIds.size === 0) return activeNewick;
-    return pruneNewick(activeNewick, filteredAsvIds);
+    if (!filters.treePrune || filteredAsvIds.size === 0) return store.treeNewick;
+    return pruneNewick(store.treeNewick, filteredAsvIds);
   });
 
   // ---- Taxonomy data ----

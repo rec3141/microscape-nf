@@ -28,6 +28,7 @@
     samples: true,
     network: true,
     phylogeny: true,
+    heatmap: true,
   });
 
   function toggle(section) {
@@ -268,16 +269,6 @@
       {#if sections.phylogeny}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            <span class="text-xs text-slate-400">Tree</span>
-            <select bind:value={filters.treeSource} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
-              <option value="phylogeny">Phylogeny (NJ)</option>
-              {#if store.heatmapNewick}
-                <option value="ward">Ward Clustering</option>
-              {/if}
-            </select>
-          </label>
-
-          <label class="block">
             <span class="text-xs text-slate-400">Layout</span>
             <select bind:value={filters.treeLayout} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
               <option value="rc">Rectangular</option>
@@ -332,6 +323,29 @@
           <label class="flex items-center gap-2 text-xs">
             <input type="checkbox" bind:checked={filters.treePrune} class="accent-blue-500" />
             Prune filtered tips
+          </label>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- ══ Heatmap Controls ══ -->
+  {#if activeTab === 'heatmap'}
+    <div class="border-b border-slate-800">
+      <button class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200" onclick={() => toggle('heatmap')}>
+        Heatmap
+        <span class="text-[10px]">{sections.heatmap ? '▾' : '▸'}</span>
+      </button>
+      {#if sections.heatmap}
+        <div class="space-y-3 px-3 pb-3">
+          <label class="block">
+            <span class="text-xs text-slate-400">ASV ordering</span>
+            <select bind:value={filters.heatmapAsvTree} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
+              <option value="ward">Ward Clustering</option>
+              {#if store.treeNewick}
+                <option value="phylogeny">Phylogeny (NJ)</option>
+              {/if}
+            </select>
           </label>
         </div>
       {/if}

@@ -306,7 +306,7 @@
 
       <!-- Title -->
       <div class="absolute top-1 left-1/2 -translate-x-1/2 text-xs text-slate-500 pointer-events-none">
-        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs (Bray-Curtis, avg. linkage)
+        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs (Bray-Curtis, Ward)
       </div>
 
       <!-- Tooltip -->

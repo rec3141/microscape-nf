@@ -46,7 +46,7 @@
     networkZoom: null,
 
     // Phylogeny
-    treeSource: 'phylogeny',   // 'phylogeny' or 'ward'
+    heatmapAsvTree: 'ward',    // 'ward' or 'phylogeny' — ASV ordering on heatmap
     treeLayout: 'rc',
     treeMinBootstrap: 0,
     treePrune: false,
