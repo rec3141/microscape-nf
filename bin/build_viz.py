@@ -516,7 +516,7 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
     if len(samples) > 1:
         row_dist = pdist(transformed, metric='braycurtis')
         row_dist = np.nan_to_num(row_dist, nan=1.0)
-        row_link = linkage(row_dist, method='average')
+        row_link = linkage(row_dist, method='ward')
         row_dendro = dendrogram(row_link, no_plot=True)
         row_order = row_dendro['leaves']
         # Extract dendrogram coordinates
@@ -532,7 +532,7 @@ def build_heatmap(seqtab, seq_to_id, taxonomy_dict):
     if len(seqs) > 1:
         col_dist = pdist(transformed.T, metric='braycurtis')
         col_dist = np.nan_to_num(col_dist, nan=1.0)
-        col_link = linkage(col_dist, method='average')
+        col_link = linkage(col_dist, method='ward')
         col_dendro = dendrogram(col_link, no_plot=True)
         col_order = col_dendro['leaves']
         col_dendro_data = {
