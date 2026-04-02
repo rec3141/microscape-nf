@@ -217,8 +217,14 @@
       {#if sections.phylogeny}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            <span class="text-xs text-slate-400">Min prevalence: {filters.treeMinPrevalence || 0}</span>
-            <input type="range" min="0" max="100" step="1" bind:value={filters.treeMinPrevalence} class="mt-1 w-full accent-blue-500" />
+            <span class="text-xs text-slate-400">Layout</span>
+            <select bind:value={filters.treeLayout} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
+              <option value="rc">Rectangular</option>
+              <option value="rd">Radial</option>
+              <option value="cr">Circular</option>
+              <option value="dg">Diagonal</option>
+              <option value="hr">Hierarchical</option>
+            </select>
           </label>
 
           <label class="block">
@@ -229,6 +235,11 @@
                 <option value={level}>{level}</option>
               {/each}
             </select>
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-slate-400">Min prevalence: {filters.treeMinPrevalence || 0}</span>
+            <input type="range" min="0" max="100" step="1" bind:value={filters.treeMinPrevalence} class="mt-1 w-full accent-blue-500" />
           </label>
         </div>
       {/if}

@@ -34,6 +34,7 @@
     corrThreshold: 0.3,
     showEdges: true,
     // Phylogeny
+    treeLayout: 'rc',
     treeMinPrevalence: 0,
     treeLabelLevel: 'id',
   });

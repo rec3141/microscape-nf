@@ -8,24 +8,7 @@
 
   let { filters = {} } = $props();
 
-  // ---- Layout cycle ----
-  let treeType = $state('rc');
-  const layoutDefs = [
-    { key: 'rc', label: 'Rectangular' },
-    { key: 'rd', label: 'Radial' },
-    { key: 'cr', label: 'Circular' },
-    { key: 'dg', label: 'Diagonal' },
-    { key: 'hr', label: 'Hierarchical' },
-  ];
-  function cycleLayout() {
-    const keys = layoutDefs.map(l => l.key);
-    treeType = keys[(keys.indexOf(treeType) + 1) % keys.length];
-  }
-  function layoutLabel() {
-    return layoutDefs.find(l => l.key === treeType)?.label || treeType;
-  }
-
-  // Color-by comes from shared filters.colorByLevel
+  let treeType = $derived(filters.treeLayout || 'rc');
 
   // ---- Taxonomy data ----
   let primaryDb = $derived(Object.keys(store.taxonomy)[0] || null);
@@ -153,30 +136,6 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <!-- Controls bar -->
-  <div class="flex items-center gap-3 flex-wrap text-xs border-b border-slate-800 bg-slate-900/60 px-4 py-2">
-    <span class="text-slate-400">Layout:</span>
-    <button
-      class="px-3 py-1 rounded-md border border-cyan-400 bg-cyan-400/10 text-cyan-400"
-      style="min-width: 6rem"
-      onclick={cycleLayout}
-    >
-      {layoutLabel()} &#x25BE;
-    </button>
-
-    <span class="text-slate-400">Labels:</span>
-    <select
-      bind:value={filters.treeLabelLevel}
-      class="bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1"
-    >
-      <option value="id">ASV ID</option>
-      {#each taxLevels as level}
-        <option value={level}>{level}</option>
-      {/each}
-    </select>
-
-    <span class="text-slate-500 ml-auto">{filteredAsvIds.size} / {store.asvs.length} ASVs</span>
-  </div>
 
   <!-- Tree + info panel -->
   <div class="flex flex-1 overflow-hidden">
