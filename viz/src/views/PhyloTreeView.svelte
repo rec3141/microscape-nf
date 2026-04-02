@@ -69,6 +69,26 @@
     return buildTaxColorMap(effectiveColorLevel, filters.taxonFilter);
   });
 
+  // Build label for an ASV based on the current label level
+  function makeLabel(asvId) {
+    const labelLevel = filters.treeLabelLevel || 'id';
+    if (labelLevel === 'id') return asvId;
+
+    const tax = taxByAsv[asvId];
+    if (!tax) return asvId;
+
+    const levelIdx = taxLevels.indexOf(labelLevel);
+    if (levelIdx >= 0 && tax[levelIdx]) {
+      return `${tax[levelIdx]} (${asvId})`;
+    }
+
+    // Show deepest available taxonomy
+    for (let i = tax.length - 1; i >= 0; i--) {
+      if (tax[i]) return `${tax[i]} (${asvId})`;
+    }
+    return asvId;
+  }
+
   let nodeStyles = $derived.by(() => {
     const styles = {};
     const cmap = taxColorMap?.colorMap;
@@ -76,12 +96,15 @@
     for (const asv of store.asvs) {
       const id = asv.id;
       const isFiltered = filteredAsvIds.has(id);
+      const label = makeLabel(id);
 
       if (!isFiltered) {
         styles[id] = {
           fillColour: [71, 85, 105, 60],
+          fontColour: [71, 85, 105, 60],
           shape: 'circle',
           nodeSize: 0.3,
+          label,
         };
         continue;
       }
@@ -93,10 +116,14 @@
         hex = GROUP_HEX[asv.group] || GROUP_HEX.unknown;
       }
 
+      const rgba = hexToRgba255(hex);
+
       styles[id] = {
-        fillColour: hexToRgba255(hex),
+        fillColour: rgba,
+        fontColour: rgba,
         shape: 'circle',
         nodeSize: 1,
+        label,
       };
     }
     return styles;
@@ -136,6 +163,17 @@
     >
       {layoutLabel()} &#x25BE;
     </button>
+
+    <span class="text-slate-400">Labels:</span>
+    <select
+      bind:value={filters.treeLabelLevel}
+      class="bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1"
+    >
+      <option value="id">ASV ID</option>
+      {#each taxLevels as level}
+        <option value={level}>{level}</option>
+      {/each}
+    </select>
 
     <span class="text-slate-500 ml-auto">{filteredAsvIds.size} / {store.asvs.length} ASVs</span>
   </div>
