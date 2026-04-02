@@ -35,7 +35,7 @@
     showEdges: true,
     // Phylogeny
     treeLayout: 'rc',
-    treeMinPrevalence: 0,
+    treeMinBootstrap: 0,
     treeLabelLevels: ['Genus', 'id'],
   });
 

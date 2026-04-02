@@ -264,8 +264,8 @@
           </fieldset>
 
           <label class="block">
-            <span class="text-xs text-slate-400">Min prevalence: {filters.treeMinPrevalence || 0}</span>
-            <input type="range" min="0" max="100" step="1" bind:value={filters.treeMinPrevalence} class="mt-1 w-full accent-blue-500" />
+            <span class="text-xs text-slate-400">Min bootstrap: {filters.treeMinBootstrap || 0}%</span>
+            <input type="range" min="0" max="100" step="5" bind:value={filters.treeMinBootstrap} class="mt-1 w-full accent-blue-500" />
           </label>
         </div>
       {/if}

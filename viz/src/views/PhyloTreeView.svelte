@@ -26,17 +26,34 @@
     catch { return null; }
   });
 
-  // ---- Filtered ASV set (by taxonomy, group, prevalence) ----
+  // Bootstrap data
+  let bootByAsv = $derived.by(() => {
+    if (!primaryDb || !store.taxonomy[primaryDb]?.bootstraps) return {};
+    return store.taxonomy[primaryDb].bootstraps;
+  });
+
+  // ---- Filtered ASV set (by taxonomy, group, bootstrap) ----
   let filteredAsvIds = $derived.by(() => {
     const re = taxonRe();
     const gf = filters.groupFlags || {};
-    const minPrev = filters.treeMinPrevalence || 0;
+    const minBoot = filters.treeMinBootstrap || 0;
     const ids = new Set();
     for (const asv of store.asvs) {
-      if ((asv.prevalence ?? 0) < minPrev) continue;
       const group = asv.group ?? 'unknown';
       if (gf[group] === false) continue;
       if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
+      // Check bootstrap at deepest assigned rank
+      if (minBoot > 0) {
+        const boot = bootByAsv[asv.id];
+        const tax = taxByAsv[asv.id];
+        if (boot && tax) {
+          let deepestBoot = 0;
+          for (let i = tax.length - 1; i >= 0; i--) {
+            if (tax[i]) { deepestBoot = boot[i] || 0; break; }
+          }
+          if (deepestBoot < minBoot) continue;
+        }
+      }
       ids.add(asv.id);
     }
     return ids;
@@ -50,12 +67,6 @@
   let taxColorMap = $derived.by(() => {
     if (effectiveColorLevel === 'group') return null;
     return buildTaxColorMap(effectiveColorLevel, filters.taxonFilter);
-  });
-
-  // Bootstrap data
-  let bootByAsv = $derived.by(() => {
-    if (!primaryDb || !store.taxonomy[primaryDb]?.bootstraps) return {};
-    return store.taxonomy[primaryDb].bootstraps;
   });
 
   // Build label for an ASV based on selected label levels
