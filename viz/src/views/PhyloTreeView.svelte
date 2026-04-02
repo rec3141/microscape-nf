@@ -200,7 +200,7 @@
       }
 
       let hex;
-      if (filters.colorMode === 'asvCluster') {
+      if (filters.colorMode === 'cluster') {
         hex = getClusterColor(id, 'asvCluster', filters.asvClusterK);
       } else if (cmap) {
         hex = getAsvColor(id, effectiveColorLevel, cmap);

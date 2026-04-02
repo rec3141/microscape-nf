@@ -115,10 +115,8 @@
 
         const proportion = count / totalCount;
         let color;
-        if (filters.colorMode === 'sampleCluster') {
+        if (filters.colorMode === 'cluster') {
           color = getClusterColor(sample.id, 'sampleCluster', filters.sampleClusterK);
-        } else if (filters.colorMode === 'asvCluster') {
-          color = getClusterColor(asv.id, 'asvCluster', filters.asvClusterK);
         } else if (cmap) {
           color = getAsvColor(asv.id, colorLevel, cmap);
         } else {

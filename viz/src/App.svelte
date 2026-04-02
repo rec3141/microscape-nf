@@ -15,7 +15,7 @@
   let filters = $state({
     // Taxonomy (shared across all views)
     taxonFilter: '',
-    colorMode: 'taxonomy',     // 'taxonomy', 'group', 'sampleCluster', 'asvCluster'
+    colorMode: 'taxonomy',     // 'taxonomy', 'group', 'cluster'
     sampleClusterK: 4,
     asvClusterK: 4,
     colorByLevel: 'Domain',    // current taxonomy nav level

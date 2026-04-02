@@ -146,9 +146,10 @@
       return clusterVal || '#64748b';
     }
 
-    const colMode = filters.colorMode === 'asvCluster' ? 'asvCluster' : null;
+    const isCluster = filters.colorMode === 'cluster';
+    const colMode = isCluster ? 'asvCluster' : null;
     const colK = filters.asvClusterK;
-    const rowMode = filters.colorMode === 'sampleCluster' ? 'sampleCluster' : null;
+    const rowMode = isCluster ? 'sampleCluster' : null;
     const rowK = filters.sampleClusterK;
 
     // ── Draw column dendrogram (SVG, above heatmap) ──
