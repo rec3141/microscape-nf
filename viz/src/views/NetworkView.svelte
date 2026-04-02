@@ -21,7 +21,7 @@
     const re = taxonRe();
     const gf = filters.groupFlags || {};
     return store.asvs.filter(a => {
-      if ((a.prevalence ?? 0) < (filters.minPrevalence || 0)) return false;
+      if ((a.n_samples ?? 0) < (filters.minPrevalence || 0)) return false;
       const group = a.group ?? 'unknown';
       if (gf[group] === false) return false;
       if (re && !(re.test(a.taxonomy ?? '') || re.test(a.id ?? ''))) return false;
@@ -77,7 +77,7 @@
         opacity: 0.7,
       },
       text: filteredAsvs.map(a =>
-        `${a.id}<br>${a.taxonomy ?? ''}<br>${(a.total_reads ?? 0).toLocaleString()} reads<br>${a.prevalence ?? 0} samples`
+        `${a.id}<br>${a.taxonomy ?? ''}<br>${(a.total_reads ?? 0).toLocaleString()} reads<br>${a.n_samples ?? 0} samples`
       ),
       hoverinfo: 'text',
       showlegend: false,
@@ -171,7 +171,7 @@
       <p class="mt-1 text-xs text-slate-400">{selectedAsvObj.taxonomy ?? 'No taxonomy'}</p>
       <p class="text-xs text-slate-500">
         {(selectedAsvObj.total_reads ?? 0).toLocaleString()} total reads |
-        Prevalence: {selectedAsvObj.prevalence ?? 0}
+        Prevalence: {selectedAsvObj.n_samples ?? 0}
       </p>
     </div>
   {/if}

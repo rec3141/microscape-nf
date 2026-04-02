@@ -283,7 +283,7 @@
               </div>
               <div class="flex justify-between">
                 <dt class="text-slate-400">Prevalence</dt>
-                <dd class="font-mono">{clickedNode.asv.prevalence || 0} samples</dd>
+                <dd class="font-mono">{clickedNode.asv.n_samples || 0} samples</dd>
               </div>
 
               {#if clickedNode.tax}
