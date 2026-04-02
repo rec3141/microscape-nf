@@ -1,46 +1,65 @@
 // Primer removal with cutadapt.
 //
-// Removes primer sequences from paired-end reads using separate forward and
-// reverse primer files. R1 must match a forward primer and R2 must match a
-// reverse primer — pairs missing either are discarded.
+// Two-pass approach:
+//   1. DETECT_PRIMERS: runs all primer pairs on each sample, picks the best match
+//   2. REMOVE_PRIMERS: runs the selected primer pair with --discard-untrimmed
 //
-// Auto-detection selects primer set by filename prefix (16S, 18S, ITS).
-// Default: bacterial 16S (515F/806RB).
+// If metadata provides a primer_pair column, DETECT_PRIMERS is skipped.
+
+process DETECT_PRIMERS {
+    tag "${meta.id}"
+    label 'process_low'
+    conda "${projectDir}/envs/python.yml"
+
+    input:
+    tuple val(meta), path(r1), path(r2)
+    path(primer_files)
+
+    output:
+    tuple val(meta), path(r1), path(r2), env(BEST_PRIMER), emit: detected
+
+    script:
+    """
+    # Run cutadapt with each primer file, count passing reads
+    BEST_PRIMER=""
+    BEST_COUNT=0
+
+    for pf in ${primer_files}; do
+        COUNT=\$(cutadapt -g file:\$pf -G file:\$pf --discard-untrimmed \
+            -j ${task.cpus} -e ${params.primer_error_rate} \
+            -o /dev/null -p /dev/null \
+            ${r1} ${r2} 2>&1 | grep "Pairs written" | grep -oP '[\\d,]+' | head -1 | tr -d ',')
+        COUNT=\${COUNT:-0}
+        echo "\$pf: \$COUNT pairs"
+        if [ "\$COUNT" -gt "\$BEST_COUNT" ]; then
+            BEST_COUNT=\$COUNT
+            BEST_PRIMER=\$pf
+        fi
+    done
+
+    echo "Best: \$BEST_PRIMER (\$BEST_COUNT pairs)"
+    """
+}
 
 process REMOVE_PRIMERS {
     tag "${meta.id}"
     label 'process_medium'
     conda "${projectDir}/envs/python.yml"
-    publishDir "${params.outdir}/trimmed", mode: 'copy', enabled: !params.store_dir
+    publishDir "${params.outdir}/trimmed", mode: 'copy', pattern: "*_cutadapt.log", enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/trimmed" : null
 
     input:
-    tuple val(meta), path(r1), path(r2)
+    tuple val(meta), path(r1), path(r2), val(primer_file)
 
     output:
     tuple val(meta), path("${meta.id}_R1.trimmed.fastq.gz"), path("${meta.id}_R2.trimmed.fastq.gz"), emit: reads
     path("${meta.id}_cutadapt.log"), emit: log
 
     script:
-    // Auto-select primer files based on sample name prefix
-    def fwd_file = params.primers_fwd ?: (
-        params.primer_auto ? (
-            meta.id =~ /^18/ ? params.primers_fwd_euk :
-            meta.id =~ /^ITS/ ? params.primers_fwd_its :
-            params.primers_fwd_bac
-        ) : params.primers_fwd_bac
-    )
-    def rev_file = params.primers_rev ?: (
-        params.primer_auto ? (
-            meta.id =~ /^18/ ? params.primers_rev_euk :
-            meta.id =~ /^ITS/ ? params.primers_rev_its :
-            params.primers_rev_bac
-        ) : params.primers_rev_bac
-    )
     """
     cutadapt \\
-        -g file:${fwd_file} \\
-        -G file:${rev_file} \\
+        -g file:${primer_file} \\
+        -G file:${primer_file} \\
         --discard-untrimmed \\
         --pair-filter=any \\
         -j ${task.cpus} \\
@@ -50,6 +69,6 @@ process REMOVE_PRIMERS {
         ${r1} ${r2} \\
         > ${meta.id}_cutadapt.log 2>&1
 
-    echo "[INFO] ${meta.id}: primer removal complete" >&2
+    echo "[INFO] ${meta.id}: primer removal complete (${primer_file})" >&2
     """
 }

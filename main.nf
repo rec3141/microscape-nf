@@ -108,6 +108,7 @@ if (params.run_demultiplex && (!params.forward_bcs || !params.reverse_bcs)) {
 
 // Stage A: Preprocessing and denoising
 include { DEMULTIPLEX }       from './modules/demultiplex'
+include { DETECT_PRIMERS }    from './modules/primers'
 include { REMOVE_PRIMERS }    from './modules/primers'
 include { AUTO_TRIM }         from './modules/denoise'
 include { FILTER_TRIM }       from './modules/denoise'
@@ -176,8 +177,25 @@ workflow {
                 def new_meta = meta + [plate: plate]
                 [new_meta, r1, r2]
             }
+    } else if (params.primers_fwd && params.primers_rev) {
+        // Explicit primer pair provided — use directly
+        ch_with_primers = ch_demuxed.map { meta, r1, r2 ->
+            [meta, r1, r2, file(params.primers_fwd)]
+        }
+        REMOVE_PRIMERS(ch_with_primers)
+        ch_trimmed = REMOVE_PRIMERS.out.reads
+            .map { meta, r1, r2 ->
+                def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
+                def new_meta = meta + [plate: plate]
+                [new_meta, r1, r2]
+            }
     } else {
-        REMOVE_PRIMERS(ch_demuxed)
+        // Auto-detect best primer pair per sample
+        ch_primer_files = Channel.fromPath("${projectDir}/primers/primers-*.fa").collect()
+        DETECT_PRIMERS(ch_demuxed, ch_primer_files)
+
+        // Route detected primer to REMOVE_PRIMERS
+        REMOVE_PRIMERS(DETECT_PRIMERS.out.detected)
         ch_trimmed = REMOVE_PRIMERS.out.reads
             .map { meta, r1, r2 ->
                 def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
