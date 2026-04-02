@@ -10,6 +10,45 @@
 
   let treeType = $derived(filters.treeLayout || 'rc');
 
+  // Prune newick to only include filtered tips
+  function pruneNewick(nwk, keepIds) {
+    if (!nwk || !keepIds.size) return nwk;
+    // Parse tip names from newick, rebuild keeping only matching tips
+    // Simple approach: use regex to find all tip labels and filter
+    const allTips = new Set(nwk.match(/ASV_\d+/g) || []);
+    const removeTips = [...allTips].filter(t => !keepIds.has(t));
+    if (removeTips.length === 0) return nwk;
+
+    // Iteratively remove tips from the newick string
+    let result = nwk;
+    for (const tip of removeTips) {
+      // Remove "tip:branchlen" or "tip" patterns
+      // Pattern: tip followed by optional :number, then , or )
+      result = result.replace(new RegExp(`${tip}:[\\d.eE+-]+`, 'g'), '');
+      result = result.replace(new RegExp(`${tip}(?=[,)])`, 'g'), '');
+    }
+    // Clean up empty clades: (,) -> () -> remove
+    for (let i = 0; i < 20; i++) {
+      const prev = result;
+      result = result.replace(/\(,/g, '(');
+      result = result.replace(/,\)/g, ')');
+      result = result.replace(/,,+/g, ',');
+      result = result.replace(/\(\)/g, '');
+      result = result.replace(/\([^(),]+:[^(),]*\)(?:Inner\d*)?:[^(),]*/g, (m) => {
+        // Single-child internal node — unwrap
+        const inner = m.match(/\(([^()]+)\)/);
+        return inner ? inner[1] : m;
+      });
+      if (result === prev) break;
+    }
+    return result;
+  }
+
+  let displayNewick = $derived.by(() => {
+    if (!filters.treePrune || filteredAsvIds.size === 0) return store.treeNewick;
+    return pruneNewick(store.treeNewick, filteredAsvIds);
+  });
+
   // ---- Taxonomy data ----
   let primaryDb = $derived(Object.keys(store.taxonomy)[0] || null);
   let taxByAsv = $derived.by(() => {
@@ -160,7 +199,7 @@
 
   <!-- Tree + info panel -->
   <div class="flex flex-1 overflow-hidden">
-    {#if !store.treeNewick}
+    {#if !displayNewick}
       <div class="flex-1 flex items-center justify-center">
         <div class="text-center">
           <p class="text-slate-400 mb-2">No phylogenetic tree available</p>
@@ -170,7 +209,7 @@
     {:else}
       <div class="{clickedNode ? 'w-2/3' : 'w-full'} transition-all">
         <PhylocanvasTree
-          newick={store.treeNewick}
+          newick={displayNewick}
           {treeType}
           styles={nodeStyles}
           onNodeClick={handleNodeClick}

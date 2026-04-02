@@ -36,6 +36,7 @@
     // Phylogeny
     treeLayout: 'rc',
     treeMinBootstrap: 0,
+    treePrune: false,
     treeLabelLevels: ['Genus', 'id'],
   });
 

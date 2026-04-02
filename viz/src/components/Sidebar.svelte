@@ -267,6 +267,11 @@
             <span class="text-xs text-slate-400">Min bootstrap: {filters.treeMinBootstrap || 0}%</span>
             <input type="range" min="0" max="100" step="5" bind:value={filters.treeMinBootstrap} class="mt-1 w-full accent-blue-500" />
           </label>
+
+          <label class="flex items-center gap-2 text-xs">
+            <input type="checkbox" bind:checked={filters.treePrune} class="accent-blue-500" />
+            Prune filtered tips
+          </label>
         </div>
       {/if}
     </div>
