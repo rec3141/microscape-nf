@@ -9,13 +9,15 @@
   let canvas;
   let rowDendroSvg;
   let colDendroSvg;
+  let colColorBar;
+  let rowColorBar;
   let tooltip = $state({ show: false, x: 0, y: 0, text: '' });
 
   // Layout constants
   const ROW_DENDRO_W = 80;
   const COL_DENDRO_H = 60;
-  const LABEL_W = 0;  // auto-hide labels for large matrices
-  const LABEL_H = 0;
+  const COLOR_BAR_W = 8;  // row-side color bar width
+  const COLOR_BAR_H = 8;  // col-side color bar height
 
   onMount(async () => {
     try {
@@ -76,8 +78,8 @@
 
     // Get container size
     const rect = container.getBoundingClientRect();
-    const heatW = rect.width - ROW_DENDRO_W;
-    const heatH = rect.height - COL_DENDRO_H;
+    const heatW = rect.width - ROW_DENDRO_W - COLOR_BAR_W;
+    const heatH = rect.height - COL_DENDRO_H - COLOR_BAR_H;
 
     const cellW = heatW / nCols;
     const cellH = heatH / nRows;
@@ -118,7 +120,7 @@
     }
     ctx.putImageData(imgData, 0, 0);
 
-    // ── Dendrogram coloring ──
+    // ── Color bar helpers ──
     const colorLevel = (filters.colorMode === 'taxonomy' || filters.colorMode === undefined)
       ? getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)
       : null;
@@ -126,9 +128,9 @@
       ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap
       : null;
 
-    // Build a set of ASV IDs matching the taxonomy filter
+    // Build filtered set for dimming
     let filteredAsvSet = null;
-    if (filters.taxonFilter && (filters.colorMode === 'taxonomy' || !filters.colorMode)) {
+    if (filters.taxonFilter) {
       filteredAsvSet = new Set();
       const db = Object.keys(store.taxonomy)[0];
       const assigns = db ? store.taxonomy[db]?.assignments : {};
@@ -137,52 +139,30 @@
       const lower = (filters.taxonFilter || '').toLowerCase();
       for (const asvId in assigns) {
         const fullTax = assigns[asvId].filter(Boolean).join(';');
-        const match = re
-          ? (re.test(fullTax) || re.test(asvId))
-          : (fullTax.toLowerCase().includes(lower));
+        const match = re ? (re.test(fullTax) || re.test(asvId)) : fullTax.toLowerCase().includes(lower);
         if (match) filteredAsvSet.add(asvId);
       }
     }
 
-    function leafColor(id, type) {
+    function getColor(id, type) {
       if (filters.colorMode === 'cluster') {
         const mode = type === 'sample' ? 'sampleCluster' : 'asvCluster';
         const k = type === 'sample' ? filters.sampleClusterK : filters.asvClusterK;
         return getClusterColor(id, mode, k);
       }
       if (type === 'asv') {
-        // If filter active, only color matching ASVs
-        if (filteredAsvSet && !filteredAsvSet.has(id)) return '#1e293b';
-
+        if (filteredAsvSet && !filteredAsvSet.has(id)) return '#0f172a';
         if (filters.colorMode === 'group') {
           const asv = store.asvs.find(a => a.id === id);
           return GROUP_HEX[asv?.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
         }
         if (taxCmap) return getAsvColor(id, colorLevel, taxCmap);
-
-        // Fallback: if we have a filter match but no cmap, use a highlight color
         if (filteredAsvSet) return '#22d3ee';
       }
-      return '#64748b';
-    }
-
-    // Only color leaf branches (U-segments touching dcoord=0)
-    function segmentColor(icoord, dcoord, orderedIds, type, n) {
-      // A leaf branch has dcoord[0]==0 or dcoord[3]==0
-      const leftIsLeaf = dcoord[0] === 0;
-      const rightIsLeaf = dcoord[3] === 0;
-      if (!leftIsLeaf && !rightIsLeaf) return '#64748b';
-
-      const leftIdx = Math.round((icoord[0] - 5) / 10);
-      const rightIdx = Math.round((icoord[3] - 5) / 10);
-
-      if (leftIsLeaf && rightIsLeaf) {
-        const lc = leafColor(orderedIds[leftIdx], type);
-        const rc = leafColor(orderedIds[rightIdx], type);
-        return lc === rc ? lc : '#64748b';
+      if (type === 'sample' && filters.colorMode === 'cluster') {
+        return getClusterColor(id, 'sampleCluster', filters.sampleClusterK);
       }
-      if (leftIsLeaf) return leafColor(orderedIds[leftIdx], type);
-      return leafColor(orderedIds[rightIdx], type);
+      return '#334155';
     }
 
     // ── Draw column dendrogram (SVG, above heatmap) ──
@@ -201,12 +181,11 @@
           const py = COL_DENDRO_H - (iy[j] / maxDist) * (COL_DENDRO_H - 4);
           points.push(`${px},${py}`);
         }
-        const color = segmentColor(ix, iy, asvIds, 'asv', nCols);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
-        line.setAttribute('stroke', color);
-        line.setAttribute('stroke-width', color === '#64748b' ? '0.8' : '1.5');
+        line.setAttribute('stroke', '#475569');
+        line.setAttribute('stroke-width', '0.8');
         colDendroSvg.appendChild(line);
       }
     }
@@ -227,13 +206,40 @@
           const px = ROW_DENDRO_W - (iy[j] / maxDist) * (ROW_DENDRO_W - 4);
           points.push(`${px},${py}`);
         }
-        const color = segmentColor(ix, iy, sampleIds, 'sample', nRows);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
-        line.setAttribute('stroke', color);
-        line.setAttribute('stroke-width', color === '#64748b' ? '0.8' : '1.5');
+        line.setAttribute('stroke', '#475569');
+        line.setAttribute('stroke-width', '0.8');
         rowDendroSvg.appendChild(line);
+      }
+    }
+
+    // ── Column color bar (below col dendrogram, above heatmap) ──
+    if (colColorBar) {
+      colColorBar.width = heatW * dpr;
+      colColorBar.height = COLOR_BAR_H * dpr;
+      colColorBar.style.width = heatW + 'px';
+      colColorBar.style.height = COLOR_BAR_H + 'px';
+      const cbCtx = colColorBar.getContext('2d');
+      cbCtx.scale(dpr, dpr);
+      for (let col = 0; col < nCols; col++) {
+        cbCtx.fillStyle = getColor(asvIds[col], 'asv');
+        cbCtx.fillRect(col * cellW, 0, Math.ceil(cellW), COLOR_BAR_H);
+      }
+    }
+
+    // ── Row color bar (right of row dendrogram, left of heatmap) ──
+    if (rowColorBar) {
+      rowColorBar.width = COLOR_BAR_W * dpr;
+      rowColorBar.height = heatH * dpr;
+      rowColorBar.style.width = COLOR_BAR_W + 'px';
+      rowColorBar.style.height = heatH + 'px';
+      const rbCtx = rowColorBar.getContext('2d');
+      rbCtx.scale(dpr, dpr);
+      for (let row = 0; row < nRows; row++) {
+        rbCtx.fillStyle = getColor(sampleIds[row], 'sample');
+        rbCtx.fillRect(0, row * cellH, COLOR_BAR_W, Math.ceil(cellH));
       }
     }
 
@@ -272,19 +278,27 @@
     </div>
   {:else}
     <div class="flex-1 relative" bind:this={container}>
-      <!-- Grid: [dendro-spacer][col-dendro] / [row-dendro][heatmap] -->
-      <div class="absolute inset-0 grid" style="grid-template-columns: {ROW_DENDRO_W}px 1fr; grid-template-rows: {COL_DENDRO_H}px 1fr;">
-        <!-- Top-left spacer -->
+      <!-- Grid: dendro | colorbar | heatmap, with col dendro and colorbar on top -->
+      <div class="absolute inset-0 grid" style="grid-template-columns: {ROW_DENDRO_W}px {COLOR_BAR_W}px 1fr; grid-template-rows: {COL_DENDRO_H}px {COLOR_BAR_H}px 1fr;">
+        <!-- Row 1: spacer | spacer | col dendrogram -->
         <div></div>
-        <!-- Column dendrogram -->
+        <div></div>
         <div class="overflow-hidden">
           <svg bind:this={colDendroSvg}></svg>
         </div>
-        <!-- Row dendrogram -->
+        <!-- Row 2: spacer | spacer | col color bar -->
+        <div></div>
+        <div></div>
+        <div class="overflow-hidden">
+          <canvas bind:this={colColorBar} class="block"></canvas>
+        </div>
+        <!-- Row 3: row dendrogram | row color bar | heatmap -->
         <div class="overflow-hidden">
           <svg bind:this={rowDendroSvg}></svg>
         </div>
-        <!-- Heatmap canvas -->
+        <div class="overflow-hidden">
+          <canvas bind:this={rowColorBar} class="block"></canvas>
+        </div>
         <div class="overflow-hidden">
           <canvas bind:this={canvas} class="block"></canvas>
         </div>
