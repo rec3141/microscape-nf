@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { store } from '../stores/data.svelte.js';
+  import { store, getClusterColor } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
 
@@ -118,14 +118,45 @@
     }
     ctx.putImageData(imgData, 0, 0);
 
+    // ── Cluster color helpers ──
+    // Map leaf position (scipy 5,15,25...) to ordered index
+    function leafIdxFromPos(pos, n) {
+      return Math.round((pos - 5) / 10);
+    }
+
+    // For a U-segment, find all leaf indices it spans (left endpoint to right endpoint)
+    function segmentLeafRange(icoord, n) {
+      const left = leafIdxFromPos(Math.min(icoord[0], icoord[3]), n);
+      const right = leafIdxFromPos(Math.max(icoord[0], icoord[3]), n);
+      return [Math.max(0, left), Math.min(n - 1, right)];
+    }
+
+    // Get cluster color for a dendrogram segment
+    function segmentColor(icoord, orderedIds, mode, k, n) {
+      if (!mode || !k) return '#64748b';
+      const [lo, hi] = segmentLeafRange(icoord, n);
+      let clusterVal = null;
+      for (let idx = lo; idx <= hi; idx++) {
+        const id = orderedIds[idx];
+        if (!id) continue;
+        const c = getClusterColor(id, mode, k);
+        if (clusterVal === null) clusterVal = c;
+        else if (c !== clusterVal) return '#64748b';  // mixed clusters
+      }
+      return clusterVal || '#64748b';
+    }
+
+    const colMode = filters.colorMode === 'asvCluster' ? 'asvCluster' : null;
+    const colK = filters.asvClusterK;
+    const rowMode = filters.colorMode === 'sampleCluster' ? 'sampleCluster' : null;
+    const rowK = filters.sampleClusterK;
+
     // ── Draw column dendrogram (SVG, above heatmap) ──
     colDendroSvg.innerHTML = '';
     colDendroSvg.setAttribute('width', heatW);
     colDendroSvg.setAttribute('height', COL_DENDRO_H);
 
     if (colDendro.icoord.length > 0) {
-      // scipy dendrogram: icoord values are 5, 15, 25... (step 10, centered on leaves)
-      // Scale to pixel positions
       const maxDist = Math.max(...colDendro.dcoord.flat());
       for (let i = 0; i < colDendro.icoord.length; i++) {
         const ix = colDendro.icoord[i];
@@ -136,11 +167,12 @@
           const py = COL_DENDRO_H - (iy[j] / maxDist) * (COL_DENDRO_H - 4);
           points.push(`${px},${py}`);
         }
+        const color = segmentColor(ix, asvIds, colMode, colK, nCols);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
-        line.setAttribute('stroke', '#64748b');
-        line.setAttribute('stroke-width', '0.8');
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', color === '#64748b' ? '0.8' : '1.5');
         colDendroSvg.appendChild(line);
       }
     }
@@ -153,19 +185,20 @@
     if (rowDendro.icoord.length > 0) {
       const maxDist = Math.max(...rowDendro.dcoord.flat());
       for (let i = 0; i < rowDendro.icoord.length; i++) {
-        const ix = rowDendro.icoord[i];  // leaf positions (vertical)
-        const iy = rowDendro.dcoord[i];  // heights (horizontal)
+        const ix = rowDendro.icoord[i];
+        const iy = rowDendro.dcoord[i];
         const points = [];
         for (let j = 0; j < 4; j++) {
           const py = ((ix[j] - 5) / (nRows * 10 - 10)) * heatH;
           const px = ROW_DENDRO_W - (iy[j] / maxDist) * (ROW_DENDRO_W - 4);
           points.push(`${px},${py}`);
         }
+        const color = segmentColor(ix, sampleIds, rowMode, rowK, nRows);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
-        line.setAttribute('stroke', '#64748b');
-        line.setAttribute('stroke-width', '0.8');
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', color === '#64748b' ? '0.8' : '1.5');
         rowDendroSvg.appendChild(line);
       }
     }
