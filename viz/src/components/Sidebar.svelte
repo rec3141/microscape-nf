@@ -82,7 +82,24 @@
         <label class="block">
           <span class="text-xs text-slate-400">Color by</span>
           <select bind:value={filters.colorMode} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200"
-            onchange={() => { filters.navStack = []; filters.taxonFilter = ''; }}>
+            onchange={(e) => {
+              if (e.target.value !== 'taxonomy') {
+                // Save taxonomy nav state
+                filters._savedTaxNav = {
+                  colorByLevel: filters.colorByLevel,
+                  navStack: filters.navStack,
+                  taxonFilter: filters.taxonFilter,
+                };
+              } else {
+                // Restore taxonomy nav state
+                if (filters._savedTaxNav) {
+                  filters.colorByLevel = filters._savedTaxNav.colorByLevel;
+                  filters.navStack = filters._savedTaxNav.navStack;
+                  filters.taxonFilter = filters._savedTaxNav.taxonFilter;
+                  filters._savedTaxNav = null;
+                }
+              }
+            }}>
             <option value="taxonomy">Taxonomy</option>
             <option value="group">Group (broad)</option>
             {#if store.heatmap?.sampleClusters || store.heatmap?.asvClusters}
