@@ -126,6 +126,24 @@
       ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap
       : null;
 
+    // Build a set of ASV IDs matching the taxonomy filter
+    let filteredAsvSet = null;
+    if (filters.taxonFilter && (filters.colorMode === 'taxonomy' || !filters.colorMode)) {
+      filteredAsvSet = new Set();
+      const db = Object.keys(store.taxonomy)[0];
+      const assigns = db ? store.taxonomy[db]?.assignments : {};
+      let re;
+      try { re = new RegExp(filters.taxonFilter, 'i'); } catch { re = null; }
+      const lower = (filters.taxonFilter || '').toLowerCase();
+      for (const asvId in assigns) {
+        const fullTax = assigns[asvId].filter(Boolean).join(';');
+        const match = re
+          ? (re.test(fullTax) || re.test(asvId))
+          : (fullTax.toLowerCase().includes(lower));
+        if (match) filteredAsvSet.add(asvId);
+      }
+    }
+
     function leafColor(id, type) {
       if (filters.colorMode === 'cluster') {
         const mode = type === 'sample' ? 'sampleCluster' : 'asvCluster';
@@ -133,11 +151,17 @@
         return getClusterColor(id, mode, k);
       }
       if (type === 'asv') {
+        // If filter active, only color matching ASVs
+        if (filteredAsvSet && !filteredAsvSet.has(id)) return '#1e293b';
+
         if (filters.colorMode === 'group') {
           const asv = store.asvs.find(a => a.id === id);
           return GROUP_HEX[asv?.group ?? 'prokaryote'] ?? GROUP_HEX.unknown;
         }
         if (taxCmap) return getAsvColor(id, colorLevel, taxCmap);
+
+        // Fallback: if we have a filter match but no cmap, use a highlight color
+        if (filteredAsvSet) return '#22d3ee';
       }
       return '#64748b';
     }
