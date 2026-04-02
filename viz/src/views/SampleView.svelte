@@ -83,7 +83,12 @@
   $effect(() => {
     if (!plotDiv) return;
     if (filteredSamples.length === 0) {
-      if (hasPlot) Plotly.react(plotDiv, [{ x: [], y: [], type: 'scattergl' }]);
+      if (hasPlot) Plotly.react(plotDiv, [{ x: [], y: [], type: 'scattergl' }], {
+        plot_bgcolor: 'rgba(2, 6, 15, 1)', paper_bgcolor: 'rgba(2, 6, 15, 1)',
+        xaxis: { visible: false }, yaxis: { visible: false },
+        annotations: [{ text: 'No samples match filters', showarrow: false,
+          font: { color: '#64748b', size: 14 }, xref: 'paper', yref: 'paper', x: 0.5, y: 0.5 }],
+      });
       return;
     }
 

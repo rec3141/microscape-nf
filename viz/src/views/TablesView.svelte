@@ -15,13 +15,13 @@
     { key: 'taxonomy', label: 'Taxonomy' },
     { key: 'group', label: 'Group' },
     { key: 'total_reads', label: 'Total Reads', numeric: true },
-    { key: 'prevalence', label: 'Prevalence', numeric: true },
+    { key: 'n_samples', label: 'Prevalence', numeric: true },
   ];
 
   const sampleCols = [
     { key: 'id', label: 'Sample ID' },
-    { key: 'reads', label: 'Reads', numeric: true },
-    { key: 'richness', label: 'Richness', numeric: true },
+    { key: 'total_reads', label: 'Reads', numeric: true },
+    { key: 'n_asvs', label: 'Richness', numeric: true },
   ];
 
   let cols = $derived(activeTable === 'asvs' ? asvCols : sampleCols);

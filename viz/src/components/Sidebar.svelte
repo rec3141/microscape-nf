@@ -150,7 +150,7 @@
   </div>
 
   <!-- ══ Sample Controls ══ -->
-  {#if activeTab === 'samples'}
+  {#if activeTab === 'samples' || activeTab === 'network'}
     <div class="border-b border-slate-800">
       <button class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200" onclick={() => toggle('samples')}>
         Sample Filters
@@ -180,7 +180,7 @@
   {/if}
 
   <!-- ══ Network Controls ══ -->
-  {#if activeTab === 'network'}
+  {#if activeTab === 'network' || activeTab === 'samples'}
     <div class="border-b border-slate-800">
       <button class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200" onclick={() => toggle('network')}>
         Network Filters
@@ -201,6 +201,11 @@
           <label class="flex items-center gap-2 text-sm">
             <input type="checkbox" bind:checked={filters.showEdges} class="accent-blue-500" />
             Show edges
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-slate-400">ASV point scale: {(filters.networkPointScale ?? 1).toFixed(1)}x</span>
+            <input type="range" min="0.1" max="5" step="0.1" bind:value={filters.networkPointScale} class="mt-1 w-full accent-blue-500" />
           </label>
         </div>
       {/if}

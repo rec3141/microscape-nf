@@ -66,10 +66,12 @@
             return filteredAsvs.map(a => {
               const idx = store.asvs.indexOf(a);
               const count = asvCounts.get(idx) || 0;
-              return count > 0 ? Math.max(4, Math.log2(count + 1) * 2) : 2;
+              const s = filters.networkPointScale ?? 1;
+              return count > 0 ? Math.max(4, Math.log2(count + 1) * 2 * s) : 2;
             });
           }
-          return filteredAsvs.map(a => Math.max(3, Math.log2((a.total_reads ?? 1) + 1) * 1.5));
+          const s = filters.networkPointScale ?? 1;
+          return filteredAsvs.map(a => Math.max(3, Math.log2((a.total_reads ?? 1) + 1) * 1.5 * s));
         })(),
         color: colors,
         opacity: 0.7,

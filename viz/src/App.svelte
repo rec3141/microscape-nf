@@ -33,6 +33,7 @@
     minPrevalence: 0,
     corrThreshold: 0.3,
     showEdges: true,
+    networkPointScale: 1.0,
     // Selections (shared across views)
     lassoSampleIds: new Set(),
     lassoAsvIds: new Set(),

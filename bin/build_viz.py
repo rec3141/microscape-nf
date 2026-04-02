@@ -185,8 +185,9 @@ def build_asvs(seqtab, seq_tsne, renorm_table_list, taxonomy_dict):
     """
     log_info("Building asvs.json")
 
-    # Get unique sequences sorted for stable ASV IDs
-    sequences = sorted(seqtab["sequence"].unique())
+    # Sort sequences by total abundance (descending) so ASV_000001 is most abundant
+    seq_abundance = seqtab.groupby("sequence")["count"].sum().sort_values(ascending=False)
+    sequences = list(seq_abundance.index)
     seq_to_id = {seq: f"ASV_{i+1:06d}" for i, seq in enumerate(sequences)}
 
     # Aggregate per-ASV stats
