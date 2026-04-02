@@ -118,20 +118,7 @@
     }
     ctx.putImageData(imgData, 0, 0);
 
-    // ── Cluster color helpers ──
-    // Map leaf position (scipy 5,15,25...) to ordered index
-    function leafIdxFromPos(pos, n) {
-      return Math.round((pos - 5) / 10);
-    }
-
-    // For a U-segment, find all leaf indices it spans (left endpoint to right endpoint)
-    function segmentLeafRange(icoord, n) {
-      const left = leafIdxFromPos(Math.min(icoord[0], icoord[3]), n);
-      const right = leafIdxFromPos(Math.max(icoord[0], icoord[3]), n);
-      return [Math.max(0, left), Math.min(n - 1, right)];
-    }
-
-    // Get color for an individual leaf
+    // ── Dendrogram coloring ──
     const colorLevel = (filters.colorMode === 'taxonomy' || filters.colorMode === undefined)
       ? getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter)
       : null;
@@ -155,18 +142,23 @@
       return '#64748b';
     }
 
-    // Get color for a dendrogram segment — uniform if all leaves share a color
-    function segmentColor(icoord, orderedIds, type, n) {
-      const [lo, hi] = segmentLeafRange(icoord, n);
-      let first = null;
-      for (let idx = lo; idx <= hi; idx++) {
-        const id = orderedIds[idx];
-        if (!id) continue;
-        const c = leafColor(id, type);
-        if (first === null) first = c;
-        else if (c !== first) return '#64748b';
+    // Only color leaf branches (U-segments touching dcoord=0)
+    function segmentColor(icoord, dcoord, orderedIds, type, n) {
+      // A leaf branch has dcoord[0]==0 or dcoord[3]==0
+      const leftIsLeaf = dcoord[0] === 0;
+      const rightIsLeaf = dcoord[3] === 0;
+      if (!leftIsLeaf && !rightIsLeaf) return '#64748b';
+
+      const leftIdx = Math.round((icoord[0] - 5) / 10);
+      const rightIdx = Math.round((icoord[3] - 5) / 10);
+
+      if (leftIsLeaf && rightIsLeaf) {
+        const lc = leafColor(orderedIds[leftIdx], type);
+        const rc = leafColor(orderedIds[rightIdx], type);
+        return lc === rc ? lc : '#64748b';
       }
-      return first || '#64748b';
+      if (leftIsLeaf) return leafColor(orderedIds[leftIdx], type);
+      return leafColor(orderedIds[rightIdx], type);
     }
 
     // ── Draw column dendrogram (SVG, above heatmap) ──
@@ -185,7 +177,7 @@
           const py = COL_DENDRO_H - (iy[j] / maxDist) * (COL_DENDRO_H - 4);
           points.push(`${px},${py}`);
         }
-        const color = segmentColor(ix, asvIds, 'asv', nCols);
+        const color = segmentColor(ix, iy, asvIds, 'asv', nCols);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
@@ -211,7 +203,7 @@
           const px = ROW_DENDRO_W - (iy[j] / maxDist) * (ROW_DENDRO_W - 4);
           points.push(`${px},${py}`);
         }
-        const color = segmentColor(ix, sampleIds, 'sample', nRows);
+        const color = segmentColor(ix, iy, sampleIds, 'sample', nRows);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         line.setAttribute('points', points.join(' '));
         line.setAttribute('fill', 'none');
