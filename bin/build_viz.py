@@ -360,10 +360,23 @@ def build_taxonomy(taxonomy_dict, seq_to_id):
                 vals = [str(v) if pd.notna(v) else "" for v in tax_df.loc[seq]]
                 assignments[asv_id] = vals
 
-        result[db_name] = {
+        # Include bootstraps if available
+        bootstraps = {}
+        boot_df = tax_data.get("boot") if isinstance(tax_data, dict) else None
+        if boot_df is not None and isinstance(boot_df, pd.DataFrame):
+            for seq in boot_df.index:
+                if seq in seq_to_id:
+                    asv_id = seq_to_id[seq]
+                    bootstraps[asv_id] = [int(v) if pd.notna(v) else 0 for v in boot_df.loc[seq]]
+
+        entry = {
             "levels": levels,
             "assignments": assignments,
         }
+        if bootstraps:
+            entry["bootstraps"] = bootstraps
+
+        result[db_name] = entry
         log_info(f"  {db_name}: {len(levels)} levels, "
                  f"{len(assignments)} ASVs assigned")
 

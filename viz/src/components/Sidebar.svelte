@@ -227,15 +227,41 @@
             </select>
           </label>
 
-          <label class="block">
-            <span class="text-xs text-slate-400">Tip labels</span>
-            <select bind:value={filters.treeLabelLevel} class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-200">
-              <option value="id">ASV ID</option>
-              {#each taxLevels as level}
-                <option value={level}>{level}</option>
-              {/each}
-            </select>
-          </label>
+          <fieldset class="space-y-1">
+            <legend class="text-xs text-slate-400">Tip labels</legend>
+            <label class="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={filters.treeLabelLevels?.includes('id')}
+                onchange={(e) => {
+                  const levels = [...(filters.treeLabelLevels || [])];
+                  if (e.target.checked) levels.push('id');
+                  else levels.splice(levels.indexOf('id'), 1);
+                  filters.treeLabelLevels = levels;
+                }} class="accent-blue-500" />
+              ASV ID
+            </label>
+            {#each taxLevels as level}
+              <label class="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={filters.treeLabelLevels?.includes(level)}
+                  onchange={(e) => {
+                    const levels = [...(filters.treeLabelLevels || [])];
+                    if (e.target.checked) levels.push(level);
+                    else levels.splice(levels.indexOf(level), 1);
+                    filters.treeLabelLevels = levels;
+                  }} class="accent-blue-500" />
+                {level}
+              </label>
+            {/each}
+            <label class="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={filters.treeLabelLevels?.includes('bootstrap')}
+                onchange={(e) => {
+                  const levels = [...(filters.treeLabelLevels || [])];
+                  if (e.target.checked) levels.push('bootstrap');
+                  else levels.splice(levels.indexOf('bootstrap'), 1);
+                  filters.treeLabelLevels = levels;
+                }} class="accent-blue-500" />
+              Bootstrap
+            </label>
+          </fieldset>
 
           <label class="block">
             <span class="text-xs text-slate-400">Min prevalence: {filters.treeMinPrevalence || 0}</span>

@@ -52,24 +52,36 @@
     return buildTaxColorMap(effectiveColorLevel, filters.taxonFilter);
   });
 
-  // Build label for an ASV based on the current label level
+  // Bootstrap data
+  let bootByAsv = $derived.by(() => {
+    if (!primaryDb || !store.taxonomy[primaryDb]?.bootstraps) return {};
+    return store.taxonomy[primaryDb].bootstraps;
+  });
+
+  // Build label for an ASV based on selected label levels
   function makeLabel(asvId) {
-    const labelLevel = filters.treeLabelLevel || 'id';
-    if (labelLevel === 'id') return asvId;
-
+    const levels = filters.treeLabelLevels || ['id'];
     const tax = taxByAsv[asvId];
-    if (!tax) return asvId;
+    const boot = bootByAsv[asvId];
+    const parts = [];
 
-    const levelIdx = taxLevels.indexOf(labelLevel);
-    if (levelIdx >= 0 && tax[levelIdx]) {
-      return `${tax[levelIdx]} (${asvId})`;
+    for (const level of levels) {
+      if (level === 'id') {
+        parts.push(asvId);
+      } else if (level === 'bootstrap') {
+        if (boot) {
+          // Show bootstrap for the deepest assigned level
+          for (let i = boot.length - 1; i >= 0; i--) {
+            if (tax && tax[i]) { parts.push(`(${boot[i]})`); break; }
+          }
+        }
+      } else if (tax) {
+        const idx = taxLevels.indexOf(level);
+        if (idx >= 0 && tax[idx]) parts.push(tax[idx]);
+      }
     }
 
-    // Show deepest available taxonomy
-    for (let i = tax.length - 1; i >= 0; i--) {
-      if (tax[i]) return `${tax[i]} (${asvId})`;
-    }
-    return asvId;
+    return parts.length > 0 ? parts.join(' | ') : asvId;
   }
 
   let nodeStyles = $derived.by(() => {
@@ -83,8 +95,8 @@
 
       if (!isFiltered) {
         styles[id] = {
-          fillColour: [71, 85, 105, 60],
-          fontColour: [71, 85, 105, 60],
+          fillColour: 'rgba(71,85,105,0.2)',
+          fontColour: 'rgba(71,85,105,0.2)',
           shape: 'circle',
           nodeSize: 0.3,
           label,
@@ -99,11 +111,9 @@
         hex = GROUP_HEX[asv.group] || GROUP_HEX.unknown;
       }
 
-      const rgba = hexToRgba255(hex);
-
       styles[id] = {
-        fillColour: rgba,
-        fontColour: rgba,
+        fillColour: hex,
+        fontColour: hex,
         shape: 'circle',
         nodeSize: 1,
         label,

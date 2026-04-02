@@ -36,7 +36,7 @@
     // Phylogeny
     treeLayout: 'rc',
     treeMinPrevalence: 0,
-    treeLabelLevel: 'id',
+    treeLabelLevels: ['Genus', 'id'],
   });
 
   function updateTab() {
