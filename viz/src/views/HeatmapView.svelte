@@ -256,7 +256,7 @@
           show: true,
           x: e.clientX,
           y: e.clientY,
-          text: `${sampleIds[row]} | ${asvIds[col]} ${asvLabels[col]} | RA: ${(val ** 4 * 100).toFixed(2)}% | ∜RA: ${val.toFixed(4)}`,
+          text: `${sampleIds[row]} | ${asvIds[col]} ${asvLabels[col]} | ${(val ** 4 * 100).toFixed(2)}%`,
         };
       } else {
         tooltip = { show: false, x: 0, y: 0, text: '' };
