@@ -69,11 +69,11 @@
               const idx = store.asvs.indexOf(a);
               const count = asvCounts.get(idx) || 0;
               const s = filters.networkPointScale ?? 1;
-              return count > 0 ? Math.min(50, Math.max(2, Math.log2(count + 1) * 2 * s)) : 2;
+              return count > 0 ? Math.max(2, Math.log2(count + 1) * 2 * s) : 2;
             });
           }
           const s = filters.networkPointScale ?? 1;
-          return filteredAsvs.map(a => Math.min(50, Math.max(2, Math.log2((a.total_reads ?? 1) + 1) * 1.5 * s)));
+          return filteredAsvs.map(a => Math.max(2, Math.log2((a.total_reads ?? 1) + 1) * 1.5 * s));
         })(),
         color: colors,
         opacity: 0.7,
