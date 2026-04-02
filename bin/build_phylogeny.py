@@ -274,6 +274,27 @@ if tree_obj is None and newick_str is not None:
         tree_obj = newick_str  # Store as string if Phylo unavailable
 
 # ---------------------------------------------------------------------------
+# Midpoint rooting
+# ---------------------------------------------------------------------------
+try:
+    from Bio import Phylo
+    import io
+
+    if tree_obj is None:
+        tree_obj = Phylo.read(io.StringIO(newick_str), "newick")
+
+    # Midpoint root
+    tree_obj.root_at_midpoint()
+
+    # Re-export newick
+    buf = io.StringIO()
+    Phylo.write(tree_obj, buf, "newick")
+    newick_str = buf.getvalue().strip()
+    print("[INFO] Tree midpoint-rooted")
+except Exception as e:
+    print(f"[WARN] Midpoint rooting failed: {e}")
+
+# ---------------------------------------------------------------------------
 # Save outputs
 # ---------------------------------------------------------------------------
 
