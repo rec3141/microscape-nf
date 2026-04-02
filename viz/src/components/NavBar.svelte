@@ -3,6 +3,7 @@
     { id: 'samples', label: 'Sample Explorer', hash: '#samples' },
     { id: 'network', label: 'ASV Network', hash: '#network' },
     { id: 'phylogeny', label: 'Phylogeny', hash: '#phylogeny' },
+    { id: 'heatmap', label: 'Heatmap', hash: '#heatmap' },
     { id: 'tables', label: 'Data Tables', hash: '#tables' },
   ];
 
