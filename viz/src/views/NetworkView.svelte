@@ -68,10 +68,10 @@
             return filteredAsvs.map(a => {
               const idx = store.asvs.indexOf(a);
               const count = asvCounts.get(idx) || 0;
-              return count > 0 ? Math.sqrt(Math.log2(count + 1)) * s * 0.3 : 1;
+              return count > 0 ? Math.min(60, Math.sqrt(Math.log2(count + 1)) * s * 0.3) : 1;
             });
           }
-          return filteredAsvs.map(a => Math.sqrt(Math.log2((a.total_reads ?? 1) + 1)) * s * 0.3);
+          return filteredAsvs.map(a => Math.min(60, Math.sqrt(Math.log2((a.total_reads ?? 1) + 1)) * s * 0.3));
         })(),
         color: colors,
         opacity: 0.7,

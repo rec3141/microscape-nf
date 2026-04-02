@@ -144,7 +144,7 @@
       mode: 'markers',
       type: 'scattergl',
       marker: {
-        size: allPoints.map(p => p.size * scale * 0.3),
+        size: allPoints.map(p => Math.min(60, p.size * scale * 0.3)),
         color: allPoints.map(p => p.color),
         opacity: 0.7,
         line: { width: 0 },
