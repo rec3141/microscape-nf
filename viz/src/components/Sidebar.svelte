@@ -159,9 +159,8 @@
       {#if sections.samples}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            {@const maxReads = Math.max(...store.samples.map(s => s.total_reads || 0), 1)}
-            <span class="text-xs text-slate-400">Min reads: {(filters.minReads || 0).toLocaleString()} / {maxReads.toLocaleString()}</span>
-            <input type="range" min="0" max={maxReads} step={Math.max(1, Math.round(maxReads / 200))} bind:value={filters.minReads} class="mt-1 w-full accent-blue-500" />
+            <span class="text-xs text-slate-400">Min reads: {(filters.minReads || 0).toLocaleString()} / {Math.max(...store.samples.map(s => s.total_reads || 0), 1).toLocaleString()}</span>
+            <input type="range" min="0" max={Math.max(...store.samples.map(s => s.total_reads || 0), 1)} step={Math.max(1, Math.round(Math.max(...store.samples.map(s => s.total_reads || 0), 1) / 200))} bind:value={filters.minReads} class="mt-1 w-full accent-blue-500" />
           </label>
 
           <AutocompleteInput
@@ -190,9 +189,8 @@
       {#if sections.network}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            {@const maxPrev = Math.max(...store.asvs.map(a => a.n_samples || 0), 1)}
-            <span class="text-xs text-slate-400">Min prevalence: {filters.minPrevalence || 0} / {maxPrev}</span>
-            <input type="range" min="0" max={maxPrev} step="1" bind:value={filters.minPrevalence} class="mt-1 w-full accent-blue-500" />
+            <span class="text-xs text-slate-400">Min prevalence: {filters.minPrevalence || 0} / {Math.max(...store.asvs.map(a => a.n_samples || 0), 1)}</span>
+            <input type="range" min="0" max={Math.max(...store.asvs.map(a => a.n_samples || 0), 1)} step="1" bind:value={filters.minPrevalence} class="mt-1 w-full accent-blue-500" />
           </label>
 
           <label class="block">
