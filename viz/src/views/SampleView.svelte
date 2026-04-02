@@ -11,6 +11,7 @@
 
   let plotDiv;
   let hasPlot = false;
+  let lassoSelectedIds = $state(new Set());
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -37,11 +38,16 @@
     const re = taxonRe();
     const gf = filters.groupFlags || {};
 
-    // Merge counts across selected sample(s) or all filtered samples
+    // Merge counts: single click > lasso > all filtered
     const merged = new Map();
-    const sampleIds = store.selectedSample != null
-      ? [store.samples[store.selectedSample]?.id]
-      : filteredSamples.map(s => s.id);
+    let sampleIds;
+    if (store.selectedSample != null) {
+      sampleIds = [store.samples[store.selectedSample]?.id];
+    } else if (lassoSelectedIds.size > 0) {
+      sampleIds = [...lassoSelectedIds];
+    } else {
+      sampleIds = filteredSamples.map(s => s.id);
+    }
 
     for (const sampleId of sampleIds) {
       for (const e of (cMap.get(sampleId) ?? [])) {
@@ -76,7 +82,11 @@
   // ── Build plotly traces ───────────────────────────────────────────────────
 
   $effect(() => {
-    if (!plotDiv || filteredSamples.length === 0) return;
+    if (!plotDiv) return;
+    if (filteredSamples.length === 0) {
+      if (hasPlot) Plotly.react(plotDiv, [{ x: [], y: [], type: 'scattergl' }]);
+      return;
+    }
 
     const colorLevel = filters.colorMode === 'group' ? 'group' : getEffectiveColorLevel(filters.colorByLevel, filters.taxonFilter);
     const cmap = colorLevel !== 'group' ? buildTaxColorMap(colorLevel, filters.taxonFilter).colorMap : null;
@@ -169,7 +179,28 @@
           const sId = bestIdx >= 0 ? filteredSamples[bestIdx]?.id : null;
           const sIdx = sId ? store.samples.findIndex(s => s.id === sId) : -1;
           store.selectedSample = sIdx >= 0 ? sIdx : null;
+          lassoSelectedIds = new Set();
         }
+      });
+
+      plotDiv.on('plotly_selected', (data) => {
+        if (data?.points?.length > 0) {
+          const ids = new Set();
+          for (const pt of data.points) {
+            let bestIdx = -1, bestDist = Infinity;
+            filteredSamples.forEach((s, i) => {
+              const d = (s.x - pt.x) ** 2 + (s.y - pt.y) ** 2;
+              if (d < bestDist) { bestDist = d; bestIdx = i; }
+            });
+            if (bestIdx >= 0) ids.add(filteredSamples[bestIdx].id);
+          }
+          lassoSelectedIds = ids;
+          store.selectedSample = null;
+        }
+      });
+
+      plotDiv.on('plotly_deselect', () => {
+        lassoSelectedIds = new Set();
       });
 
     } else {
@@ -187,6 +218,7 @@
       Plotly.relayout(plotDiv, { dragmode: e.type === 'keydown' ? 'lasso' : 'pan' });
     } else if (e.key === 'Escape' && e.type === 'keydown') {
       store.selectedSample = null;
+      lassoSelectedIds = new Set();
       Plotly.restyle(plotDiv, { selectedpoints: [null] });
     }
   }
@@ -213,6 +245,8 @@
         <h3 class="text-sm font-semibold text-slate-200">
           {#if selectedSampleObj}
             {selectedSampleObj.id} &mdash; {(selectedSampleObj.total_reads ?? 0).toLocaleString()} reads
+          {:else if lassoSelectedIds.size > 0}
+            {lassoSelectedIds.size} selected samples &mdash; top {topTaxa.length} ASVs
           {:else}
             All samples ({filteredSamples.length}) &mdash; top {topTaxa.length} ASVs
           {/if}
