@@ -53,6 +53,7 @@
       type: 'scattergl',
       marker: {
         size: (() => {
+          const s = filters.networkPointScale ?? 10;
           const selIds = store.selectedSample != null
             ? new Set([store.samples[store.selectedSample]?.id])
             : filters.lassoSampleIds?.size > 0 ? filters.lassoSampleIds : null;
@@ -67,14 +68,11 @@
             return filteredAsvs.map(a => {
               const idx = store.asvs.indexOf(a);
               const count = asvCounts.get(idx) || 0;
-              return count > 0 ? Math.log2(count + 1) : 0.1;
+              return count > 0 ? Math.sqrt(Math.log2(count + 1)) * s * 0.3 : 1;
             });
           }
-          return filteredAsvs.map(a => Math.log2((a.total_reads ?? 1) + 1));
+          return filteredAsvs.map(a => Math.sqrt(Math.log2((a.total_reads ?? 1) + 1)) * s * 0.3);
         })(),
-        sizemode: 'diameter',
-        sizeref: 1.0 / (filters.networkPointScale ?? 10),
-        sizemin: 1,
         color: colors,
         opacity: 0.7,
       },
