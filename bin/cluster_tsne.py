@@ -67,11 +67,12 @@ def run_ordination(dist_matrix, labels, entity_name, n_cpus):
         perplexity = max(1.0, float(n - 1) / 2.0)
         log_info(f"{entity_name}: Reducing perplexity to {perplexity} (n={n} < 30)")
 
-    log_info(f"{entity_name}: Running t-SNE (perplexity={perplexity}, max_iter=1000)")
+    n_iter = 5000
+    log_info(f"{entity_name}: Running t-SNE (perplexity={perplexity}, max_iter={n_iter})")
     tsne = TSNE(
         n_components=2,
         perplexity=perplexity,
-        max_iter=1000,
+        max_iter=n_iter,
         random_state=42,
     )
     tsne_coords = tsne.fit_transform(pca_coords)
