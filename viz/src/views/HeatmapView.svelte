@@ -19,7 +19,7 @@
   const COL_DENDRO_H = 120;
   const COLOR_BAR_W = 8;
   const COLOR_BAR_H = 8;
-  const MIN_CELL_PX = 6;  // minimum pixels per cell — determines scrollable size
+  const MIN_CELL_PX = 3;  // minimum pixels per cell — determines scrollable size
 
   onMount(async () => {
     try {
