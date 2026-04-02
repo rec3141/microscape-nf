@@ -33,6 +33,14 @@
     minPrevalence: 0,
     corrThreshold: 0.3,
     showEdges: true,
+    // Selections (shared across views)
+    lassoSampleIds: new Set(),
+    lassoAsvIds: new Set(),
+
+    // Per-view zoom persistence
+    sampleZoom: null,   // {xRange, yRange}
+    networkZoom: null,
+
     // Phylogeny
     treeLayout: 'rc',
     treeMinBootstrap: 0,

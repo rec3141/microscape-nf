@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Plotly from 'plotly.js-dist-min';
   import {
-    store,
+    store, countsBySample,
     GROUP_HEX,
     buildTaxColorMap, getAsvColor, getEffectiveColorLevel,
   } from '../stores/data.svelte.js';
@@ -50,7 +50,27 @@
       mode: 'markers',
       type: 'scattergl',
       marker: {
-        size: filteredAsvs.map(a => Math.max(3, Math.log2((a.total_reads ?? 1) + 1) * 1.5)),
+        size: (() => {
+          // If samples selected, size by abundance in those samples
+          const selIds = store.selectedSample != null
+            ? new Set([store.samples[store.selectedSample]?.id])
+            : filters.lassoSampleIds?.size > 0 ? filters.lassoSampleIds : null;
+          if (selIds) {
+            const cMap = countsBySample();
+            const asvCounts = new Map();
+            for (const sid of selIds) {
+              for (const e of (cMap.get(sid) ?? [])) {
+                asvCounts.set(e.asv_idx, (asvCounts.get(e.asv_idx) || 0) + e.count);
+              }
+            }
+            return filteredAsvs.map(a => {
+              const idx = store.asvs.indexOf(a);
+              const count = asvCounts.get(idx) || 0;
+              return count > 0 ? Math.max(4, Math.log2(count + 1) * 2) : 2;
+            });
+          }
+          return filteredAsvs.map(a => Math.max(3, Math.log2((a.total_reads ?? 1) + 1) * 1.5));
+        })(),
         color: colors,
         opacity: 0.7,
       },
@@ -61,10 +81,13 @@
       showlegend: false,
     };
 
+    const savedZoom = filters.networkZoom;
     const layout = {
       dragmode: 'pan',
-      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false },
-      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x' },
+      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false,
+               ...(savedZoom ? { range: savedZoom.xRange } : {}) },
+      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x',
+               ...(savedZoom ? { range: savedZoom.yRange } : {}) },
       plot_bgcolor: 'rgba(2, 6, 15, 1)',
       paper_bgcolor: 'rgba(2, 6, 15, 1)',
       font: { color: '#94a3b8' },
@@ -86,10 +109,25 @@
         }
       });
 
+      plotDiv.on('plotly_relayout', (update) => {
+        if (update['xaxis.range[0]'] != null) {
+          filters.networkZoom = {
+            xRange: [update['xaxis.range[0]'], update['xaxis.range[1]']],
+            yRange: [update['yaxis.range[0]'], update['yaxis.range[1]']],
+          };
+        }
+      });
+
     } else {
-      const curLayout = plotDiv.layout;
-      if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
-      if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
+      const zoom = filters.networkZoom;
+      if (zoom) {
+        layout.xaxis.range = zoom.xRange;
+        layout.yaxis.range = zoom.yRange;
+      } else {
+        const curLayout = plotDiv.layout;
+        if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
+        if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
+      }
       Plotly.react(plotDiv, [trace], layout, config);
     }
   });

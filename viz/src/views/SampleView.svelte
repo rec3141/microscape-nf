@@ -11,7 +11,6 @@
 
   let plotDiv;
   let hasPlot = false;
-  let lassoSelectedIds = $state(new Set());
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -43,8 +42,8 @@
     let sampleIds;
     if (store.selectedSample != null) {
       sampleIds = [store.samples[store.selectedSample]?.id];
-    } else if (lassoSelectedIds.size > 0) {
-      sampleIds = [...lassoSelectedIds];
+    } else if (filters.lassoSampleIds.size > 0) {
+      sampleIds = [...filters.lassoSampleIds];
     } else {
       sampleIds = filteredSamples.map(s => s.id);
     }
@@ -147,10 +146,13 @@
       showlegend: false,
     }];
 
+    const savedZoom = filters.sampleZoom;
     const layout = {
       dragmode: 'pan',
-      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false },
-      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x' },
+      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false,
+               ...(savedZoom ? { range: savedZoom.xRange } : {}) },
+      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x',
+               ...(savedZoom ? { range: savedZoom.yRange } : {}) },
       plot_bgcolor: 'rgba(2, 6, 15, 1)',
       paper_bgcolor: 'rgba(2, 6, 15, 1)',
       font: { color: '#94a3b8' },
@@ -179,7 +181,7 @@
           const sId = bestIdx >= 0 ? filteredSamples[bestIdx]?.id : null;
           const sIdx = sId ? store.samples.findIndex(s => s.id === sId) : -1;
           store.selectedSample = sIdx >= 0 ? sIdx : null;
-          lassoSelectedIds = new Set();
+          filters.lassoSampleIds = new Set();
         }
       });
 
@@ -194,20 +196,35 @@
             });
             if (bestIdx >= 0) ids.add(filteredSamples[bestIdx].id);
           }
-          lassoSelectedIds = ids;
+          filters.lassoSampleIds = ids;
           store.selectedSample = null;
         }
       });
 
       plotDiv.on('plotly_deselect', () => {
-        lassoSelectedIds = new Set();
+        filters.lassoSampleIds = new Set();
+      });
+
+      plotDiv.on('plotly_relayout', (update) => {
+        if (update['xaxis.range[0]'] != null) {
+          filters.sampleZoom = {
+            xRange: [update['xaxis.range[0]'], update['xaxis.range[1]']],
+            yRange: [update['yaxis.range[0]'], update['yaxis.range[1]']],
+          };
+        }
       });
 
     } else {
-      // Preserve user's current zoom
-      const curLayout = plotDiv.layout;
-      if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
-      if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
+      // Restore persisted zoom or preserve current
+      const zoom = filters.sampleZoom;
+      if (zoom) {
+        layout.xaxis.range = zoom.xRange;
+        layout.yaxis.range = zoom.yRange;
+      } else {
+        const curLayout = plotDiv.layout;
+        if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
+        if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
+      }
       Plotly.react(plotDiv, overlayTraces, layout, config);
     }
   });
@@ -218,7 +235,7 @@
       Plotly.relayout(plotDiv, { dragmode: e.type === 'keydown' ? 'lasso' : 'pan' });
     } else if (e.key === 'Escape' && e.type === 'keydown') {
       store.selectedSample = null;
-      lassoSelectedIds = new Set();
+      filters.lassoSampleIds = new Set();
       Plotly.restyle(plotDiv, { selectedpoints: [null] });
     }
   }
@@ -245,8 +262,8 @@
         <h3 class="text-sm font-semibold text-slate-200">
           {#if selectedSampleObj}
             {selectedSampleObj.id} &mdash; {(selectedSampleObj.total_reads ?? 0).toLocaleString()} reads
-          {:else if lassoSelectedIds.size > 0}
-            {lassoSelectedIds.size} selected samples &mdash; top {topTaxa.length} ASVs
+          {:else if filters.lassoSampleIds.size > 0}
+            {filters.lassoSampleIds.size} selected samples &mdash; top {topTaxa.length} ASVs
           {:else}
             All samples ({filteredSamples.length}) &mdash; top {topTaxa.length} ASVs
           {/if}
