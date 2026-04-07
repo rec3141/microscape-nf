@@ -243,21 +243,32 @@ workflow {
             }
     }
 
-    // 4a. Auto-detect truncation lengths from trimmed reads (or use explicit params)
+    // 4a. Auto-detect truncation lengths per plate (or use explicit params)
     if (params.auto_trim && params.truncLen_fwd == 0 && params.truncLen_rev == 0) {
-        // Collect trimmed R1 files for quality profiling
-        ch_trimmed_r1 = ch_trimmed.map { meta, r1, r2 -> r1 }.collect()
-        ch_trimmed_r2 = ch_trimmed.map { meta, r1, r2 -> r2 }.collect()
-        AUTO_TRIM(ch_trimmed_r1.mix(ch_trimmed_r2).collect())
-        ch_trunc_fwd = AUTO_TRIM.out.trunc_fwd
-        ch_trunc_rev = AUTO_TRIM.out.trunc_rev
-    } else {
-        ch_trunc_fwd = Channel.value(params.truncLen_fwd)
-        ch_trunc_rev = Channel.value(params.truncLen_rev)
-    }
+        // Group trimmed reads by plate for per-plate quality profiling
+        ch_plate_reads_for_trim = ch_trimmed
+            .map { meta, r1, r2 -> [meta.plate, r1, r2] }
+            .groupTuple(by: 0)
+            .map { plate, r1s, r2s -> [plate, r1s.flatten() + r2s.flatten()] }
 
-    // 4b. Filter and trim per-sample
-    FILTER_TRIM(ch_trimmed, ch_trunc_fwd, ch_trunc_rev)
+        AUTO_TRIM(ch_plate_reads_for_trim)
+
+        // Join trim params back to individual samples by plate
+        ch_filter_input = ch_trimmed
+            .map { meta, r1, r2 -> [meta.plate, meta, r1, r2] }
+            .combine(AUTO_TRIM.out.trim_params, by: 0)
+            .map { plate, meta, r1, r2, trunc_fwd, trunc_rev ->
+                [meta, r1, r2, trunc_fwd, trunc_rev]
+            }
+
+        FILTER_TRIM(ch_filter_input)
+    } else {
+        // Use explicit params — add them to each sample tuple
+        ch_filter_input = ch_trimmed.map { meta, r1, r2 ->
+            [meta, r1, r2, params.truncLen_fwd, params.truncLen_rev]
+        }
+        FILTER_TRIM(ch_filter_input)
+    }
 
     // 4b. Group filtered reads by plate
     ch_by_plate = FILTER_TRIM.out.reads

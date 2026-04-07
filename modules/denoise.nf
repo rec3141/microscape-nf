@@ -18,33 +18,31 @@ def denoiseEngine() { return params.denoise_engine ?: params.lang }
 def errExt() { return denoiseEngine() == 'python' ? 'pkl' : 'rds' }
 def seqExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 
-// TODO: AUTO_TRIM currently computes a single truncation length across all
-// input files. Different sequencing runs (plates, lanes) can have different
-// quality profiles — this should be extended to compute per-run/per-plate
-// truncation lengths and pass them to FILTER_TRIM grouped by run ID.
+// Per-plate auto-trim: computes truncation lengths from quality profiles
+// for each plate separately, so plates with different quality get different params.
 process AUTO_TRIM {
+    tag "${plate_id}"
     label 'process_low'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
-    publishDir "${params.outdir}/quality_check", mode: 'copy'
+    publishDir "${params.outdir}/quality_check", mode: 'copy', pattern: "*_auto_trim.tsv"
 
     input:
-    path(trimmed_reads)
+    tuple val(plate_id), path(trimmed_reads)
 
     output:
-    path("auto_trim.tsv"), emit: params_tsv
-    env(TRUNC_FWD), emit: trunc_fwd
-    env(TRUNC_REV), emit: trunc_rev
+    tuple val(plate_id), env(TRUNC_FWD), env(TRUNC_REV), emit: trim_params
+    path("${plate_id}_auto_trim.tsv"), emit: params_tsv
 
     script:
     """
     microscape auto-trim "." \
         --min-quality ${params.auto_trim_min_quality} \
-        --output auto_trim.tsv \
+        --output ${plate_id}_auto_trim.tsv \
         --verbose
 
-    export TRUNC_FWD=\$(grep trunc_len_fwd auto_trim.tsv | cut -f2)
-    export TRUNC_REV=\$(grep trunc_len_rev auto_trim.tsv | cut -f2)
-    echo "[INFO] Auto-trim: fwd=\$TRUNC_FWD rev=\$TRUNC_REV"
+    export TRUNC_FWD=\$(grep trunc_len_fwd ${plate_id}_auto_trim.tsv | cut -f2)
+    export TRUNC_REV=\$(grep trunc_len_rev ${plate_id}_auto_trim.tsv | cut -f2)
+    echo "[INFO] Auto-trim ${plate_id}: fwd=\$TRUNC_FWD rev=\$TRUNC_REV"
     """
 }
 
@@ -55,9 +53,7 @@ process FILTER_TRIM {
     publishDir "${params.outdir}/filtered", mode: 'copy', pattern: "*_filt_stats.tsv", enabled: !params.store_dir
 
     input:
-    tuple val(meta), path(r1), path(r2)
-    val(trunc_fwd)
-    val(trunc_rev)
+    tuple val(meta), path(r1), path(r2), val(trunc_fwd), val(trunc_rev)
 
     output:
     tuple val(meta), path("${meta.id}_R1.filt.fastq.gz"), path("${meta.id}_R2.filt.fastq.gz"), emit: reads
