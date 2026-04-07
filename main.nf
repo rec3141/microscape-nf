@@ -92,8 +92,8 @@ if (params.help) {
 // Parameter validation
 // ============================================================================
 
-if (!params.input) {
-    log.error "ERROR: --input is required. Provide path to directory containing *.fastq.gz files. Run with --help for usage."
+if (!params.input && !params.samplesheet) {
+    log.error "ERROR: --input or --samplesheet is required. Run with --help for usage."
     System.exit(1)
 }
 
@@ -137,48 +137,89 @@ include { BUNDLE_VIZ_SITE }  from './modules/shiny'
 workflow {
 
     // 1. Discover input reads
-    def input_dir = file(params.input)
-    if (!input_dir.isDirectory()) {
-        error "ERROR: --input directory does not exist: ${params.input}\nRun with --help for usage."
-    }
+    if (params.samplesheet) {
+        // ── Samplesheet mode: CSV with sample_id, run, plate_id, r1_path, r2_path, primer_pair ──
+        ch_samplesheet = Channel.fromPath(params.samplesheet)
+            .splitCsv(header: true)
+            .map { row ->
+                def meta = [
+                    id: "${row.run}_${row.sample_id}",
+                    sample_id: row.sample_id,
+                    run: row.run,
+                    plate: "${row.run}_${row.plate_id}",
+                    primer_pair: row.primer_pair ?: '',
+                ]
+                [meta, file(row.r1_path), file(row.r2_path)]
+            }
 
-    // 2. Optional demultiplexing
-    if (params.run_demultiplex) {
-        ch_raw = Channel.fromPath("${params.input}/*.fastq.gz")
-            .map { fastq ->
-                def name = fastq.baseName.replace('.fastq', '')
-                def lane = name.split('_')[0]
-                [[id: lane], fastq]
+        // Filter by primer pair if specified
+        if (params.primers) {
+            ch_samplesheet = ch_samplesheet.filter { meta, r1, r2 ->
+                meta.primer_pair == params.primers
             }
-            .groupTuple()
+        }
 
-        DEMULTIPLEX(ch_raw,
-                    file(params.forward_bcs),
-                    file(params.reverse_bcs))
-        ch_demuxed = DEMULTIPLEX.out.reads.flatten()
-            .filter { it.name.endsWith('.fastq.gz') }
-            .map { fastq ->
-                def name = fastq.baseName.replace('.fastq', '').replace('.ctrimmed', '')
-                [[id: name], fastq]
-            }
-    } else {
-        // Pair up R1/R2 files by sample prefix
-        ch_demuxed = Channel.fromFilePairs("${params.input}/*_{R1,R2,1,2}*.fastq.gz", flat: true)
-            .map { sample_id, r1, r2 ->
-                [[id: sample_id], r1, r2]
-            }
+        ch_demuxed = ch_samplesheet
+
+    } else if (params.input) {
+        def input_dir = file(params.input)
+        if (!input_dir.isDirectory()) {
+            error "ERROR: --input directory does not exist: ${params.input}\nRun with --help for usage."
+        }
+
+        // 2. Optional demultiplexing
+        if (params.run_demultiplex) {
+            ch_raw = Channel.fromPath("${params.input}/*.fastq.gz")
+                .map { fastq ->
+                    def name = fastq.baseName.replace('.fastq', '')
+                    def lane = name.split('_')[0]
+                    [[id: lane], fastq]
+                }
+                .groupTuple()
+
+            DEMULTIPLEX(ch_raw,
+                        file(params.forward_bcs),
+                        file(params.reverse_bcs))
+            ch_demuxed = DEMULTIPLEX.out.reads.flatten()
+                .filter { it.name.endsWith('.fastq.gz') }
+                .map { fastq ->
+                    def name = fastq.baseName.replace('.fastq', '').replace('.ctrimmed', '')
+                    [[id: name], fastq]
+                }
+        } else {
+            // Pair up R1/R2 files by sample prefix
+            ch_demuxed = Channel.fromFilePairs("${params.input}/*_{R1,R2,1,2}*.fastq.gz", flat: true)
+                .map { sample_id, r1, r2 ->
+                    [[id: sample_id], r1, r2]
+                }
+        }
     }
 
     // 3. Remove primers with cutadapt (skip if input is already trimmed)
-    if (params.skip_primer_removal) {
+    if (params.skip_primer_removal || params.samplesheet) {
+        // Samplesheet mode: primer removal happens per primer_pair, or data is pre-trimmed
         ch_trimmed = ch_demuxed
             .map { meta, r1, r2 ->
-                def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
-                def new_meta = meta + [plate: plate]
-                [new_meta, r1, r2]
+                if (!meta.plate) {
+                    def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
+                    meta = meta + [plate: plate]
+                }
+                [meta, r1, r2]
             }
+
+        // If samplesheet has primer_pair and we have primer files, run cutadapt
+        if (params.samplesheet && !params.skip_primer_removal) {
+            ch_with_primers = ch_trimmed.filter { meta, r1, r2 -> meta.primer_pair }
+                .map { meta, r1, r2 ->
+                    def pf = file("${projectDir}/primers/primers-${meta.primer_pair}.fa")
+                    [meta, r1, r2, pf]
+                }
+
+            REMOVE_PRIMERS(ch_with_primers)
+            ch_trimmed = REMOVE_PRIMERS.out.reads
+                .map { meta, r1, r2 -> [meta, r1, r2] }
+        }
     } else if (params.primers_fwd && params.primers_rev) {
-        // Explicit primer pair provided — use directly
         ch_with_primers = ch_demuxed.map { meta, r1, r2 ->
             [meta, r1, r2, file(params.primers_fwd)]
         }
@@ -193,8 +234,6 @@ workflow {
         // Auto-detect best primer pair per sample
         ch_primer_files = Channel.fromPath("${projectDir}/primers/primers-*.fa").collect()
         DETECT_PRIMERS(ch_demuxed, ch_primer_files)
-
-        // Route detected primer to REMOVE_PRIMERS
         REMOVE_PRIMERS(DETECT_PRIMERS.out.detected)
         ch_trimmed = REMOVE_PRIMERS.out.reads
             .map { meta, r1, r2 ->
