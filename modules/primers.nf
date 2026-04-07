@@ -8,7 +8,7 @@
 
 process DETECT_PRIMERS {
     tag "${meta.id}"
-    label 'process_low'
+    cpus 1
     conda "${projectDir}/envs/python.yml"
 
     input:
@@ -43,7 +43,7 @@ process DETECT_PRIMERS {
 
 process REMOVE_PRIMERS {
     tag "${meta.id}"
-    label 'process_medium'
+    cpus 1
     conda "${projectDir}/envs/python.yml"
     publishDir "${params.outdir}/trimmed", mode: 'copy', pattern: "*_cutadapt.log", enabled: !params.store_dir
     storeDir params.store_dir ? "${params.store_dir}/trimmed" : null
