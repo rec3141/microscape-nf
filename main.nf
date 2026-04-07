@@ -141,6 +141,10 @@ workflow {
         // ── Samplesheet mode: CSV with sample_id, run, plate_id, r1_path, r2_path, primer_pair ──
         ch_samplesheet = Channel.fromPath(params.samplesheet)
             .splitCsv(header: true)
+            .filter { row ->
+                // Only include selected rows
+                (row.selected ?: '1') == '1'
+            }
             .map { row ->
                 def meta = [
                     id: "${row.run}_${row.sample_id}",
