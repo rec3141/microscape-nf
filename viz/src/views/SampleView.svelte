@@ -98,12 +98,36 @@
     const gf = filters.groupFlags || {};
     const scale = filters.pointScale ?? 1;
 
-    // Collect all points, then sort largest first so they draw behind small ones
+    // Aggregate ASVs by taxonomy level, then draw one circle per taxon per sample
+    const db = Object.keys(store.taxonomy)[0];
+    const taxLevels = db ? store.taxonomy[db]?.levels || [] : [];
+    const taxAssignments = db ? store.taxonomy[db]?.assignments || {} : {};
+
+    // Determine aggregation level from effective color level
+    // At '_asv' level or if no taxonomy, draw individual ASVs
+    const isAsvLevel = colorLevel === '_asv';
+    const levelIdx = isAsvLevel ? -1 : taxLevels.indexOf(colorLevel);
+
+    function getAsvGroup(asvId) {
+      if (isAsvLevel) return asvId;
+      if (colorLevel === 'group') {
+        const asv = store.asvs.find(a => a.id === asvId);
+        return asv?.group || 'unknown';
+      }
+      const tax = taxAssignments[asvId];
+      if (!tax || levelIdx < 0) return asvId;
+      return tax[levelIdx] || 'unclassified';
+    }
+
     const allPoints = [];
 
     for (const sample of filteredSamples) {
       const entries = cMap.get(sample.id) ?? [];
       const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
+
+      // Aggregate counts by taxon group
+      const groupCounts = {};
+      const groupColors = {};
 
       for (const { asv_idx, count } of entries) {
         const asv = store.asvs[asv_idx];
@@ -114,37 +138,38 @@
         if ((asv.n_samples ?? 0) < (filters.minPrevalence || 0)) continue;
         if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
 
-        const proportion = count / totalCount;
-        let color;
-        if (filters.colorMode === 'cluster') {
-          color = getClusterColor(sample.id, 'sampleCluster', filters.sampleClusterK);
-        } else if (cmap) {
-          color = getAsvColor(asv.id, colorLevel, cmap);
-        } else {
-          color = GROUP_HEX[group] ?? GROUP_HEX.unknown;
-        }
+        const taxGroup = getAsvGroup(asv.id);
+        groupCounts[taxGroup] = (groupCounts[taxGroup] || 0) + count;
 
+        // Use first ASV's color for the group
+        if (!groupColors[taxGroup]) {
+          if (filters.colorMode === 'cluster') {
+            groupColors[taxGroup] = getClusterColor(sample.id, 'sampleCluster', filters.sampleClusterK);
+          } else if (cmap) {
+            groupColors[taxGroup] = getAsvColor(asv.id, colorLevel, cmap);
+          } else {
+            groupColors[taxGroup] = GROUP_HEX[group] ?? GROUP_HEX.unknown;
+          }
+        }
+      }
+
+      // One point per taxon group per sample
+      for (const [taxGroup, count] of Object.entries(groupCounts)) {
+        const proportion = count / totalCount;
         allPoints.push({
           x: sample.x,
           y: sample.y,
           size: Math.sqrt(proportion) * 20,
-          color,
+          color: groupColors[taxGroup],
           proportion,
-          text: `${sample.id}<br>${(sample.total_reads ?? 0).toLocaleString()} reads | ${sample.n_asvs ?? 0} ASVs`,
+          text: `${sample.id}<br>${taxGroup}: ${(proportion * 100).toFixed(1)}%<br>${(sample.total_reads ?? 0).toLocaleString()} reads`,
         });
       }
     }
 
     // Sort largest first — plotly draws array order, so big points go first (behind)
     allPoints.sort((a, b) => b.proportion - a.proportion);
-
-    // Auto-throttle: if too many points, keep only the largest (already sorted by proportion desc)
-    const MAX_POINTS = 100000;
     const totalPoints = allPoints.length;
-    const truncated = totalPoints > MAX_POINTS;
-    if (truncated) {
-      allPoints.length = MAX_POINTS;
-    }
 
     const overlayTraces = [{
       x: allPoints.map(p => p.x),
@@ -177,7 +202,7 @@
         font: { size: 10 },
       },
       margin: { l: 20, r: 20, t: 10, b: 20 },
-      title: { text: `${filteredSamples.length} samples, ${allPoints.length.toLocaleString()} points${truncated ? ` (capped from ${totalPoints.toLocaleString()})` : ''}`,
+      title: { text: `${filteredSamples.length} samples, ${totalPoints.toLocaleString()} points (${isAsvLevel ? 'per ASV' : 'per ' + (colorLevel === 'group' ? 'group' : colorLevel)})`,
                font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
     };
 
