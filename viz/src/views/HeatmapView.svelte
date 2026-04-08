@@ -4,6 +4,7 @@
 
   let { filters = {} } = $props();
 
+  let rawHeatmapData = null;  // full data, never reactive
   let heatmapData = $state(null);
   let container;
   let gridEl;
@@ -21,11 +22,41 @@
   const COLOR_BAR_H = 8;
   let cellSize = $derived(filters.heatmapCellSize ?? 3);
 
+  // Pre-filter heatmap at load time to avoid crashing on large datasets
+  function filterHeatmap(data, minMaxRA) {
+    if (!data?.z?.length) return data;
+    const nCols = data.z[0]?.length || 0;
+    if (nCols <= 500) return data;  // small enough, no filtering needed
+
+    const zThreshold = Math.pow(minMaxRA / 100, 0.25);
+    const keepCols = [];
+    for (let j = 0; j < nCols; j++) {
+      let maxZ = 0;
+      for (let i = 0; i < data.z.length; i++) {
+        if (data.z[i][j] > maxZ) maxZ = data.z[i][j];
+      }
+      if (maxZ >= zThreshold) keepCols.push(j);
+    }
+
+    return {
+      ...data,
+      z: data.z.map(row => keepCols.map(j => row[j])),
+      asvIds: keepCols.map(j => data.asvIds[j]),
+      asvLabels: keepCols.map(j => data.asvLabels[j]),
+      colDendro: { icoord: [], dcoord: [] },
+      _filteredCols: keepCols.length,
+      _totalCols: nCols,
+    };
+  }
+
   onMount(async () => {
     try {
       let res = await fetch('/data/heatmap.json.gz');
       if (!res.ok) res = await fetch('/data/heatmap.json');
-      if (res.ok) heatmapData = await res.json();
+      if (res.ok) {
+        rawHeatmapData = await res.json();
+        heatmapData = filterHeatmap(rawHeatmapData, filters.heatmapMinMaxRA ?? 1.0);
+      }
     } catch (e) {
       console.error('Failed to load heatmap data:', e);
     }
@@ -142,39 +173,21 @@
     return { lines, nLeaves: leafIdx, maxDepth: totalH };
   }
 
+  // Re-filter when slider changes
+  $effect(() => {
+    const threshold = filters.heatmapMinMaxRA;
+    if (rawHeatmapData) {
+      heatmapData = filterHeatmap(rawHeatmapData, threshold ?? 1.0);
+    }
+  });
+
   let usePhyloOrder = $derived(filters.heatmapAsvTree === 'phylogeny' && !!store.treeNewick);
 
   $effect(() => {
-    // Track dependencies for reactivity
     const _phyloOrder = usePhyloOrder;
-    const _minMaxRA = filters.heatmapMinMaxRA;
     if (!heatmapData || !canvas || !rowDendroSvg || !colDendroSvg) return;
 
     let { z, sampleIds, asvIds, asvLabels, rowDendro, colDendro } = heatmapData;
-
-    // Filter ASVs by min max(RA) threshold
-    const minMaxRA = (filters.heatmapMinMaxRA ?? 1) / 100;  // convert % to fraction
-    if (minMaxRA > 0) {
-      // z values are 4th-root transformed, so convert threshold: RA^0.25
-      const zThreshold = Math.pow(minMaxRA, 0.25);
-      // Find columns where max(z) >= threshold
-      const keepCols = [];
-      for (let j = 0; j < (z[0]?.length || 0); j++) {
-        let maxZ = 0;
-        for (let i = 0; i < z.length; i++) {
-          if (z[i][j] > maxZ) maxZ = z[i][j];
-        }
-        if (maxZ >= zThreshold) keepCols.push(j);
-      }
-
-      if (keepCols.length < (z[0]?.length || 0)) {
-        z = z.map(row => keepCols.map(j => row[j]));
-        asvIds = keepCols.map(j => heatmapData.asvIds[j]);
-        asvLabels = keepCols.map(j => heatmapData.asvLabels[j]);
-        // Recompute col dendrogram — can't subset scipy dendro, skip it
-        colDendro = { icoord: [], dcoord: [] };
-      }
-    }
 
     // If phylogeny ordering selected, reorder columns by NJ tree leaf order
     if (usePhyloOrder) {
