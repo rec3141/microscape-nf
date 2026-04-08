@@ -296,6 +296,78 @@ def build_counts(seqtab, seq_to_id):
 
 
 # ---------------------------------------------------------------------------
+# Build aggregated counts per taxonomy level
+# ---------------------------------------------------------------------------
+
+def build_aggregated_counts(seqtab, seq_to_id, taxonomy_dict):
+    """Pre-aggregate counts by each taxonomy level + group.
+
+    Returns dict keyed by level name, each containing:
+        {data: [[si, taxon_idx, count, proportion], ...], samples: [...], taxa: [...]}
+    """
+    log_info("Building aggregated counts")
+
+    db = next(iter(taxonomy_dict), None)
+    if not db or not taxonomy_dict[db]:
+        return {}
+
+    tax_data = taxonomy_dict[db]
+    if "tax" in tax_data and isinstance(tax_data["tax"], pd.DataFrame):
+        tax_df = tax_data["tax"]
+    else:
+        return {}
+
+    levels = list(tax_df.columns)
+    samples = sorted(seqtab["sample"].unique())
+    sample_idx = {s: i for i, s in enumerate(samples)}
+    sample_totals = seqtab.groupby("sample")["count"].sum()
+
+    result = {}
+
+    for level_name in levels:
+        # Map each sequence to its taxon at this level
+        seq_to_taxon = {}
+        for seq in seqtab["sequence"].unique():
+            if seq in tax_df.index:
+                val = tax_df.loc[seq, level_name]
+                seq_to_taxon[seq] = str(val) if pd.notna(val) and val else "unclassified"
+            else:
+                seq_to_taxon[seq] = "unclassified"
+
+        # Aggregate counts: (sample, taxon) -> total count
+        agg = seqtab.copy()
+        agg["taxon"] = agg["sequence"].map(seq_to_taxon)
+        grouped = agg.groupby(["sample", "taxon"])["count"].sum().reset_index()
+
+        # Build sparse array
+        taxa = sorted(grouped["taxon"].unique())
+        taxon_idx = {t: i for i, t in enumerate(taxa)}
+
+        data = []
+        for _, row in grouped.iterrows():
+            cnt = int(row["count"])
+            if cnt == 0:
+                continue
+            si = sample_idx[row["sample"]]
+            ti = taxon_idx[row["taxon"]]
+            total = sample_totals[row["sample"]]
+            prop = round_float(cnt / total if total > 0 else 0.0, 6)
+            data.append([si, ti, cnt, prop])
+
+        result[level_name] = {
+            "data": data,
+            "samples": samples,
+            "taxa": taxa,
+        }
+        log_info(f"  {level_name}: {len(taxa)} taxa, {len(data)} entries")
+
+    # Also add 'group' level using the ASV group field (prokaryote/eukaryote/etc)
+    # We need the group info from the renorm data or asvs
+    log_info(f"  Aggregated {len(levels)} levels")
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Build network.json
 # ---------------------------------------------------------------------------
 
@@ -757,6 +829,10 @@ def main():
     # heatmap.json.gz
     heatmap = build_heatmap(seqtab, seq_to_id, taxonomy_dict)
     write_json(heatmap, "heatmap.json.gz", compress=True)
+
+    # aggregated_counts.json.gz — pre-aggregated per taxonomy level
+    agg_counts = build_aggregated_counts(seqtab, seq_to_id, taxonomy_dict)
+    write_json(agg_counts, "aggregated_counts.json.gz", compress=True)
 
     # --- Copy Svelte app ---
     copy_svelte_app()

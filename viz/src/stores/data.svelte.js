@@ -16,6 +16,7 @@ export const store = $state({
   treeNewick: '',      // phylogeny (NJ) tree
   heatmapNewick: '',   // Ward clustering tree (from heatmap data)
   heatmap: null,
+  aggCounts: null,     // Pre-aggregated counts per taxonomy level
 
   // Selection
   selectedSample: null,
@@ -338,6 +339,12 @@ export async function loadData() {
           if (d.asvWardNewick) store.heatmapNewick = d.asvWardNewick;
         }
       })
+      .catch(() => {});
+
+    // Load pre-aggregated counts
+    fetch('/data/aggregated_counts.json.gz')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) store.aggCounts = d; })
       .catch(() => {});
   } catch (e) {
     store.error = e.message;

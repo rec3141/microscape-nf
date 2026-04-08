@@ -98,76 +98,95 @@
     const gf = filters.groupFlags || {};
     const scale = filters.pointScale ?? 1;
 
-    // Aggregate ASVs by taxonomy level, then draw one circle per taxon per sample
-    const db = Object.keys(store.taxonomy)[0];
-    const taxLevels = db ? store.taxonomy[db]?.levels || [] : [];
-    const taxAssignments = db ? store.taxonomy[db]?.assignments || {} : {};
-
-    // Determine aggregation level from effective color level
-    // At '_asv' level or if no taxonomy, draw individual ASVs
+    // Use pre-aggregated counts if available, otherwise fall back to on-the-fly
     const isAsvLevel = colorLevel === '_asv';
-    const levelIdx = isAsvLevel ? -1 : taxLevels.indexOf(colorLevel);
-
-    function getAsvGroup(asvId) {
-      if (isAsvLevel) return asvId;
-      if (colorLevel === 'group') {
-        const asv = store.asvs.find(a => a.id === asvId);
-        return asv?.group || 'unknown';
-      }
-      const tax = taxAssignments[asvId];
-      if (!tax || levelIdx < 0) return asvId;
-      return tax[levelIdx] || 'unclassified';
-    }
+    const aggLevel = isAsvLevel ? null : colorLevel;
+    const aggData = aggLevel && store.aggCounts?.[aggLevel];
 
     const allPoints = [];
 
-    for (const sample of filteredSamples) {
-      const entries = cMap.get(sample.id) ?? [];
-      const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
+    if (aggData && !isAsvLevel && filters.colorMode !== 'cluster') {
+      // Fast path: use pre-aggregated data
+      const { data: aggEntries, samples: aggSamples, taxa: aggTaxa } = aggData;
+      const sampleSet = new Set(filteredSamples.map(s => s.id));
+      const sampleLookup = {};
+      for (const s of filteredSamples) sampleLookup[s.id] = s;
 
-      // Aggregate counts by taxon group
-      const groupCounts = {};
-      const groupColors = {};
+      // Build per-sample totals from agg data
+      const sampleTotals = {};
+      for (const [si, ti, count, prop] of aggEntries) {
+        const sid = aggSamples[si];
+        if (!sampleSet.has(sid)) continue;
+        sampleTotals[sid] = (sampleTotals[sid] || 0) + count;
+      }
 
-      for (const { asv_idx, count } of entries) {
-        const asv = store.asvs[asv_idx];
-        if (!asv) continue;
-
-        const group = asv.group ?? 'prokaryote';
-        if (gf[group] === false) continue;
-        if ((asv.n_samples ?? 0) < (filters.minPrevalence || 0)) continue;
-        if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
-
-        const taxGroup = getAsvGroup(asv.id);
-        groupCounts[taxGroup] = (groupCounts[taxGroup] || 0) + count;
-
-        // Use first ASV's color for the group
-        if (!groupColors[taxGroup]) {
-          if (filters.colorMode === 'cluster') {
-            groupColors[taxGroup] = getClusterColor(sample.id, 'sampleCluster', filters.sampleClusterK);
-          } else if (cmap) {
-            groupColors[taxGroup] = getAsvColor(asv.id, colorLevel, cmap);
-          } else {
-            groupColors[taxGroup] = GROUP_HEX[group] ?? GROUP_HEX.unknown;
-          }
+      // Build color map for taxa
+      const taxonColors = {};
+      if (cmap) {
+        for (const taxon of aggTaxa) {
+          taxonColors[taxon] = cmap[taxon] || '#475569';
         }
       }
 
-      // One point per taxon group per sample
-      for (const [taxGroup, count] of Object.entries(groupCounts)) {
-        const proportion = count / totalCount;
+      for (const [si, ti, count, prop] of aggEntries) {
+        const sid = aggSamples[si];
+        if (!sampleSet.has(sid)) continue;
+        const sample = sampleLookup[sid];
+        const taxon = aggTaxa[ti];
+
+        // Apply taxonomy filter
+        if (re && !re.test(taxon)) continue;
+
+        const proportion = prop || (count / (sampleTotals[sid] || 1));
+        const color = cmap ? (taxonColors[taxon] || '#475569') : (GROUP_HEX[taxon] || '#475569');
+
         allPoints.push({
           x: sample.x,
           y: sample.y,
           size: Math.sqrt(proportion) * 20,
-          color: groupColors[taxGroup],
+          color,
           proportion,
-          text: `${sample.id}<br>${taxGroup}: ${(proportion * 100).toFixed(1)}%<br>${(sample.total_reads ?? 0).toLocaleString()} reads`,
+          text: `${sid}<br>${taxon}: ${(proportion * 100).toFixed(1)}%<br>${(sample.total_reads ?? 0).toLocaleString()} reads`,
         });
+      }
+    } else {
+      // Slow path: aggregate on the fly (for ASV level, cluster mode, or missing agg data)
+      for (const sample of filteredSamples) {
+        const entries = cMap.get(sample.id) ?? [];
+        const totalCount = entries.reduce((s, e) => s + e.count, 0) || 1;
+
+        for (const { asv_idx, count } of entries) {
+          const asv = store.asvs[asv_idx];
+          if (!asv) continue;
+
+          const group = asv.group ?? 'prokaryote';
+          if (gf[group] === false) continue;
+          if ((asv.n_samples ?? 0) < (filters.minPrevalence || 0)) continue;
+          if (re && !(re.test(asv.taxonomy ?? '') || re.test(asv.id ?? ''))) continue;
+
+          const proportion = count / totalCount;
+          let color;
+          if (filters.colorMode === 'cluster') {
+            color = getClusterColor(sample.id, 'sampleCluster', filters.sampleClusterK);
+          } else if (cmap) {
+            color = getAsvColor(asv.id, colorLevel, cmap);
+          } else {
+            color = GROUP_HEX[group] ?? GROUP_HEX.unknown;
+          }
+
+          allPoints.push({
+            x: sample.x,
+            y: sample.y,
+            size: Math.sqrt(proportion) * 20,
+            color,
+            proportion,
+            text: `${sample.id}<br>${asv.id}: ${(proportion * 100).toFixed(1)}%<br>${(sample.total_reads ?? 0).toLocaleString()} reads`,
+          });
+        }
       }
     }
 
-    // Sort largest first — plotly draws array order, so big points go first (behind)
+    // Sort largest first
     allPoints.sort((a, b) => b.proportion - a.proportion);
     const totalPoints = allPoints.length;
 

@@ -75,6 +75,7 @@
         })(),
         color: colors,
         opacity: 0.7,
+        line: { width: 0 },
       },
       text: filteredAsvs.map(a =>
         `${a.id}<br>${a.taxonomy ?? ''}<br>${(a.total_reads ?? 0).toLocaleString()} reads<br>${a.n_samples ?? 0} samples`
