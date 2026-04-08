@@ -48,6 +48,7 @@
     // Phylogeny
     heatmapAsvTree: 'ward',    // 'ward' or 'phylogeny' — ASV ordering on heatmap
     heatmapCellSize: 3,
+    heatmapMinMaxRA: 1.0,     // min(max(RA%)) to include an ASV in heatmap
     treeLayout: 'rc',
     treeMinBootstrap: 0,
     treePrune: false,

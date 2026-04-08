@@ -367,6 +367,11 @@
       {#if sections.heatmap}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
+            <span class="text-xs text-slate-400">Min max(RA): {(filters.heatmapMinMaxRA ?? 1).toFixed(1)}%</span>
+            <input type="range" min="0" max="10" step="0.1" bind:value={filters.heatmapMinMaxRA} class="mt-1 w-full accent-blue-500" />
+          </label>
+
+          <label class="block">
             <span class="text-xs text-slate-400">Cell size: {filters.heatmapCellSize}px</span>
             <input type="range" min="1" max="20" step="1" bind:value={filters.heatmapCellSize} class="mt-1 w-full accent-blue-500" />
           </label>

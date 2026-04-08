@@ -147,9 +147,34 @@
   $effect(() => {
     // Track dependencies for reactivity
     const _phyloOrder = usePhyloOrder;
+    const _minMaxRA = filters.heatmapMinMaxRA;
     if (!heatmapData || !canvas || !rowDendroSvg || !colDendroSvg) return;
 
     let { z, sampleIds, asvIds, asvLabels, rowDendro, colDendro } = heatmapData;
+
+    // Filter ASVs by min max(RA) threshold
+    const minMaxRA = (filters.heatmapMinMaxRA ?? 1) / 100;  // convert % to fraction
+    if (minMaxRA > 0) {
+      // z values are 4th-root transformed, so convert threshold: RA^0.25
+      const zThreshold = Math.pow(minMaxRA, 0.25);
+      // Find columns where max(z) >= threshold
+      const keepCols = [];
+      for (let j = 0; j < (z[0]?.length || 0); j++) {
+        let maxZ = 0;
+        for (let i = 0; i < z.length; i++) {
+          if (z[i][j] > maxZ) maxZ = z[i][j];
+        }
+        if (maxZ >= zThreshold) keepCols.push(j);
+      }
+
+      if (keepCols.length < (z[0]?.length || 0)) {
+        z = z.map(row => keepCols.map(j => row[j]));
+        asvIds = keepCols.map(j => heatmapData.asvIds[j]);
+        asvLabels = keepCols.map(j => heatmapData.asvLabels[j]);
+        // Recompute col dendrogram — can't subset scipy dendro, skip it
+        colDendro = { icoord: [], dcoord: [] };
+      }
+    }
 
     // If phylogeny ordering selected, reorder columns by NJ tree leaf order
     if (usePhyloOrder) {
@@ -452,7 +477,7 @@
 
       <!-- Title -->
       <div class="absolute top-1 left-1/2 -translate-x-1/2 text-xs text-slate-500 pointer-events-none">
-        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs — {usePhyloOrder ? 'Phylogeny (NJ)' : 'Ward'}
+        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs (max RA ≥{(filters.heatmapMinMaxRA ?? 1).toFixed(1)}%) — {usePhyloOrder ? 'Phylogeny (NJ)' : 'Ward'}
       </div>
 
       <!-- Tooltip -->
