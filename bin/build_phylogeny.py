@@ -210,70 +210,69 @@ dist_df = pd.DataFrame(dist_matrix, index=id_list, columns=id_list)
 print(f"[INFO] Distance matrix computed ({n_seqs}x{n_seqs})")
 
 # ---------------------------------------------------------------------------
-# Build neighbor-joining tree
+# Build tree with FastTree (GTR+CAT, much faster than NJ for large datasets)
 # ---------------------------------------------------------------------------
-print("[INFO] Building neighbor-joining tree ...")
+print("[INFO] Building tree with FastTree ...")
 
 tree_obj = None
 newick_str = None
 
+# Write trimmed alignment as FASTA for FastTree
+tmp_fasttree_input = os.path.join(tmp_dir, "aligned_trimmed.fasta")
+with open(tmp_fasttree_input, "w") as fh:
+    for i, aid in enumerate(id_list):
+        fh.write(f">{aid}\n{trimmed_seqs[i]}\n")
+
+# Run FastTree
+tmp_tree_out = os.path.join(tmp_dir, "fasttree.nwk")
 try:
-    from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
-    from Bio import Phylo
-    import io
+    # Try FastTree (capital F) first, then fasttree
+    for cmd in ["FastTree", "fasttree", "FastTreeMP"]:
+        try:
+            result = subprocess.run(
+                [cmd, "-gtr", "-nt", "-fastest", tmp_fasttree_input],
+                capture_output=True, text=True, timeout=3600
+            )
+            if result.returncode == 0:
+                newick_str = result.stdout.strip()
+                print(f"[INFO] Tree built with {cmd} ({n_seqs} sequences)")
+                break
+        except FileNotFoundError:
+            continue
 
-    # Bio.Phylo wants a lower-triangular list of lists
-    names = id_list[:]
-    matrix_data = []
-    for i in range(n_seqs):
-        row = [dist_matrix[i, j] for j in range(i + 1)]
-        matrix_data.append(row)
+    if not newick_str:
+        print("[WARN] FastTree not found, falling back to NJ with BioPython")
+        from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
+        from Bio import Phylo
+        import io
 
-    dm = DistanceMatrix(names, matrix_data)
-    constructor = DistanceTreeConstructor()
-    tree_obj = constructor.nj(dm)
+        names = id_list[:]
+        matrix_data = []
+        for i in range(n_seqs):
+            row = [dist_matrix[i, j] for j in range(i + 1)]
+            matrix_data.append(row)
 
-    # Convert to Newick string
-    buf = io.StringIO()
-    Phylo.write(tree_obj, buf, "newick")
-    newick_str = buf.getvalue().strip()
-    print("[INFO] NJ tree built with BioPython")
+        dm = DistanceMatrix(names, matrix_data)
+        constructor = DistanceTreeConstructor()
+        tree_obj = constructor.nj(dm)
 
-except ImportError:
-    print("[INFO] BioPython not available — building NJ tree with scipy")
-    try:
-        from scipy.cluster.hierarchy import linkage, to_tree
-        from scipy.spatial.distance import squareform
+        buf = io.StringIO()
+        Phylo.write(tree_obj, buf, "newick")
+        newick_str = buf.getvalue().strip()
+        print("[INFO] NJ tree built with BioPython (fallback)")
 
-        condensed = squareform(dist_matrix)
-        # Use average linkage as NJ approximation
-        Z = linkage(condensed, method="average")
+except Exception as e:
+    print(f"[ERROR] Tree building failed: {e}", file=sys.stderr)
+    sys.exit(1)
 
-        def _to_newick(node, labels):
-            if node.is_leaf():
-                return labels[node.id]
-            left = _to_newick(node.get_left(), labels)
-            right = _to_newick(node.get_right(), labels)
-            dl = node.dist / 2
-            dr = node.dist / 2
-            return f"({left}:{dl:.6f},{right}:{dr:.6f})"
-
-        root = to_tree(Z)
-        newick_str = _to_newick(root, id_list) + ";"
-        print("[INFO] NJ tree built with scipy (average linkage approximation)")
-    except ImportError:
-        print("[ERROR] Neither BioPython nor scipy available for tree building",
-              file=sys.stderr)
-        sys.exit(1)
-
-# Try to parse newick into Bio.Phylo tree object for pickle
+# Parse newick into Bio.Phylo tree object for midpoint rooting
 if tree_obj is None and newick_str is not None:
     try:
         from Bio import Phylo
         import io
         tree_obj = Phylo.read(io.StringIO(newick_str), "newick")
     except Exception:
-        tree_obj = newick_str  # Store as string if Phylo unavailable
+        tree_obj = newick_str
 
 # ---------------------------------------------------------------------------
 # Midpoint rooting
