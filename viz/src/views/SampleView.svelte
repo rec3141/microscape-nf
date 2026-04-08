@@ -206,13 +206,10 @@
       showlegend: false,
     }];
 
-    const savedZoom = filters.sampleZoom;
     const layout = {
       dragmode: 'pan',
-      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false,
-               ...(savedZoom ? { range: savedZoom.xRange } : {}) },
-      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x',
-               ...(savedZoom ? { range: savedZoom.yRange } : {}) },
+      xaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false },
+      yaxis: { title: '', zeroline: false, showgrid: false, showticklabels: false, scaleanchor: 'x' },
       plot_bgcolor: 'rgba(2, 6, 15, 1)',
       paper_bgcolor: 'rgba(2, 6, 15, 1)',
       font: { color: '#94a3b8' },
@@ -266,26 +263,11 @@
         filters.lassoSampleIds = new Set();
       });
 
-      plotDiv.on('plotly_relayout', (update) => {
-        if (update['xaxis.range[0]'] != null) {
-          filters.sampleZoom = {
-            xRange: [update['xaxis.range[0]'], update['xaxis.range[1]']],
-            yRange: [update['yaxis.range[0]'], update['yaxis.range[1]']],
-          };
-        }
-      });
-
     } else {
-      // Restore persisted zoom or preserve current
-      const zoom = filters.sampleZoom;
-      if (zoom) {
-        layout.xaxis.range = zoom.xRange;
-        layout.yaxis.range = zoom.yRange;
-      } else {
-        const curLayout = plotDiv.layout;
-        if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
-        if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
-      }
+      // Preserve current zoom on data updates
+      const curLayout = plotDiv.layout;
+      if (curLayout?.xaxis?.range) layout.xaxis.range = curLayout.xaxis.range;
+      if (curLayout?.yaxis?.range) layout.yaxis.range = curLayout.yaxis.range;
       Plotly.react(plotDiv, overlayTraces, layout, config);
     }
   });
