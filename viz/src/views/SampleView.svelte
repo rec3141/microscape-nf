@@ -138,6 +138,14 @@
     // Sort largest first — plotly draws array order, so big points go first (behind)
     allPoints.sort((a, b) => b.proportion - a.proportion);
 
+    // Auto-throttle: if too many points, keep only the largest (already sorted by proportion desc)
+    const MAX_POINTS = 100000;
+    const totalPoints = allPoints.length;
+    const truncated = totalPoints > MAX_POINTS;
+    if (truncated) {
+      allPoints.length = MAX_POINTS;
+    }
+
     const overlayTraces = [{
       x: allPoints.map(p => p.x),
       y: allPoints.map(p => p.y),
@@ -169,7 +177,8 @@
         font: { size: 10 },
       },
       margin: { l: 20, r: 20, t: 10, b: 20 },
-      title: { text: `${filteredSamples.length} samples`, font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
+      title: { text: `${filteredSamples.length} samples, ${allPoints.length.toLocaleString()} points${truncated ? ` (capped from ${totalPoints.toLocaleString()})` : ''}`,
+               font: { size: 12, color: '#64748b' }, x: 0.01, y: 0.99 },
     };
 
     const config = { scrollZoom: true, displayModeBar: false, doubleClick: 'reset+autosize' };
