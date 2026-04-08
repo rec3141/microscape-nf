@@ -54,24 +54,11 @@
       marker: {
         size: (() => {
           const s = filters.networkPointScale ?? 10;
-          const selIds = store.selectedSample != null
-            ? new Set([store.samples[store.selectedSample]?.id])
-            : filters.lassoSampleIds?.size > 0 ? filters.lassoSampleIds : null;
-          if (selIds) {
-            const cMap = countsBySample();
-            const asvCounts = new Map();
-            for (const sid of selIds) {
-              for (const e of (cMap.get(sid) ?? [])) {
-                asvCounts.set(e.asv_idx, (asvCounts.get(e.asv_idx) || 0) + e.count);
-              }
-            }
-            return filteredAsvs.map(a => {
-              const idx = store.asvs.indexOf(a);
-              const count = asvCounts.get(idx) || 0;
-              return count > 0 ? Math.min(60, Math.sqrt(Math.log2(count + 1)) * s * 0.3) : 1;
-            });
-          }
-          return filteredAsvs.map(a => Math.min(60, Math.sqrt(Math.log2((a.total_reads ?? 1) + 1)) * s * 0.3));
+          const nSamples = store.samples.length || 1;
+          return filteredAsvs.map(a => {
+            const meanRA = (a.total_reads ?? 0) / nSamples;
+            return Math.min(60, Math.sqrt(meanRA) * s * 0.3);
+          });
         })(),
         color: colors,
         opacity: 0.7,
