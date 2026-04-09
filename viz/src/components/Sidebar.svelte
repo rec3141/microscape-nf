@@ -373,10 +373,10 @@
       {#if sections.heatmap}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            <span class="text-xs text-slate-400">Min max(RA): {(filters.heatmapMinMaxRA ?? 1).toFixed(2)}%</span>
+            <span class="text-xs text-slate-400">Min max(RA): {(filters.heatmapMinMaxRA ?? 10).toFixed(1)}%</span>
             <input type="range" min="0" max="100" step="1"
-              value={Math.round(Math.log2((filters.heatmapMinMaxRA ?? 1) + 1) / Math.log2(101) * 100)}
-              oninput={(e) => { filters.heatmapMinMaxRA = Math.pow(2, +e.target.value / 100 * Math.log2(101)) - 1; }}
+              value={Math.round(Math.log2((filters.heatmapMinMaxRA ?? 10) + 1) / Math.log2(101) * 100)}
+              oninput={(e) => { filters.heatmapMinMaxRA = Math.round(10 * (Math.pow(2, +e.target.value / 100 * Math.log2(101)) - 1)) / 10; }}
               class="mt-1 w-full accent-blue-500" />
           </label>
 
