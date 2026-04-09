@@ -23,21 +23,36 @@
   const COLOR_BAR_H = 8;
   let cellSize = $derived(filters.heatmapCellSize ?? 3);
 
-  // Pre-filter heatmap at load time to avoid crashing on large datasets
+  // Pre-compute max z per column once (expensive, do only at load)
+  let colMaxZ = null;
+
+  function computeColMax(data) {
+    if (!data?.z?.length) return [];
+    const nCols = data.z[0]?.length || 0;
+    const maxes = new Float64Array(nCols);
+    for (let i = 0; i < data.z.length; i++) {
+      for (let j = 0; j < nCols; j++) {
+        if (data.z[i][j] > maxes[j]) maxes[j] = data.z[i][j];
+      }
+    }
+    return maxes;
+  }
+
   function filterHeatmap(data, minMaxRA) {
     if (!data?.z?.length) return data;
     const nCols = data.z[0]?.length || 0;
-    if (nCols <= 500) return data;  // small enough, no filtering needed
+
+    if (!colMaxZ || colMaxZ.length !== nCols) {
+      colMaxZ = computeColMax(data);
+    }
 
     const zThreshold = Math.pow(minMaxRA / 100, 0.25);
     const keepCols = [];
     for (let j = 0; j < nCols; j++) {
-      let maxZ = 0;
-      for (let i = 0; i < data.z.length; i++) {
-        if (data.z[i][j] > maxZ) maxZ = data.z[i][j];
-      }
-      if (maxZ >= zThreshold) keepCols.push(j);
+      if (colMaxZ[j] >= zThreshold) keepCols.push(j);
     }
+
+    if (keepCols.length === nCols) return data;
 
     return {
       ...data,
@@ -45,8 +60,6 @@
       asvIds: keepCols.map(j => data.asvIds[j]),
       asvLabels: keepCols.map(j => data.asvLabels[j]),
       colDendro: { icoord: [], dcoord: [] },
-      _filteredCols: keepCols.length,
-      _totalCols: nCols,
     };
   }
 
@@ -56,7 +69,9 @@
       if (!res.ok) res = await fetch('/data/heatmap.json');
       if (res.ok) {
         rawHeatmapData = await res.json();
-        heatmapData = filterHeatmap(rawHeatmapData, filters.heatmapMinMaxRA ?? 1.0);
+        const filtered = filterHeatmap(rawHeatmapData, filters.heatmapMinMaxRA ?? 1.0);
+        heatmapData = filtered;
+        visibleAsvCount = filtered?.asvIds?.length ?? 0;
       }
     } catch (e) {
       console.error('Failed to load heatmap data:', e);
@@ -174,13 +189,17 @@
     return { lines, nLeaves: leafIdx, maxDepth: totalH };
   }
 
-  // Re-filter when slider changes
+  // Re-filter when slider changes (debounced — 65M cell scan is expensive)
+  let filterTimer = null;
   $effect(() => {
     const threshold = filters.heatmapMinMaxRA;
     if (rawHeatmapData) {
-      const filtered = filterHeatmap(rawHeatmapData, threshold ?? 1.0);
-      heatmapData = filtered;
-      visibleAsvCount = filtered?.asvIds?.length ?? 0;
+      if (filterTimer) clearTimeout(filterTimer);
+      filterTimer = setTimeout(() => {
+        const filtered = filterHeatmap(rawHeatmapData, threshold ?? 1.0);
+        heatmapData = filtered;
+        visibleAsvCount = filtered?.asvIds?.length ?? 0;
+      }, 300);
     }
   });
 
