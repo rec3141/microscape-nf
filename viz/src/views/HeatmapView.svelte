@@ -6,6 +6,7 @@
 
   let rawHeatmapData = null;  // full data, never reactive
   let heatmapData = $state(null);
+  let visibleAsvCount = $state(0);
   let container;
   let gridEl;
   let canvas;
@@ -177,7 +178,9 @@
   $effect(() => {
     const threshold = filters.heatmapMinMaxRA;
     if (rawHeatmapData) {
-      heatmapData = filterHeatmap(rawHeatmapData, threshold ?? 1.0);
+      const filtered = filterHeatmap(rawHeatmapData, threshold ?? 1.0);
+      heatmapData = filtered;
+      visibleAsvCount = filtered?.asvIds?.length ?? 0;
     }
   });
 
@@ -490,7 +493,7 @@
 
       <!-- Title -->
       <div class="absolute top-1 left-1/2 -translate-x-1/2 text-xs text-slate-500 pointer-events-none">
-        {heatmapData.nSamples} samples × {heatmapData.nAsvs} ASVs (max RA ≥{(filters.heatmapMinMaxRA ?? 1).toFixed(1)}%) — {usePhyloOrder ? 'Phylogeny (NJ)' : 'Ward'}
+        {heatmapData.nSamples} samples × {visibleAsvCount}/{heatmapData.nAsvs} ASVs (max RA ≥{(filters.heatmapMinMaxRA ?? 1).toFixed(1)}%) — {usePhyloOrder ? 'Phylogeny (NJ)' : 'Ward'}
       </div>
 
       <!-- Tooltip -->

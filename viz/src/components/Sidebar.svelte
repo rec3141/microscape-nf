@@ -200,8 +200,12 @@
       {#if sections.samples}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            <span class="text-xs text-slate-400">Min reads: {(filters.minReads || 0).toLocaleString()} / {Math.max(...store.samples.map(s => s.total_reads || 0), 1).toLocaleString()}</span>
-            <input type="range" min="0" max={Math.max(...store.samples.map(s => s.total_reads || 0), 1)} step={Math.max(1, Math.round(Math.max(...store.samples.map(s => s.total_reads || 0), 1) / 200))} bind:value={filters.minReads} class="mt-1 w-full accent-blue-500" />
+            {@const maxReads = Math.max(...store.samples.map(s => s.total_reads || 0), 1)}
+            <span class="text-xs text-slate-400">Min reads: {(filters.minReads || 0).toLocaleString()}</span>
+            <input type="range" min="0" max="100" step="1"
+              value={Math.round(Math.log2((filters.minReads || 0) + 1) / Math.log2(maxReads + 1) * 100)}
+              oninput={(e) => { filters.minReads = Math.round(Math.pow(2, +e.target.value / 100 * Math.log2(maxReads + 1)) - 1); }}
+              class="mt-1 w-full accent-blue-500" />
           </label>
 
           <AutocompleteInput
@@ -235,8 +239,12 @@
       {#if sections.network}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            <span class="text-xs text-slate-400">Min prevalence: {filters.minPrevalence || 0} / {Math.max(...store.asvs.map(a => a.n_samples || 0), 1)}</span>
-            <input type="range" min="0" max={Math.max(...store.asvs.map(a => a.n_samples || 0), 1)} step="1" bind:value={filters.minPrevalence} class="mt-1 w-full accent-blue-500" />
+            {@const maxPrev = Math.max(...store.asvs.map(a => a.n_samples || 0), 1)}
+            <span class="text-xs text-slate-400">Min prevalence: {filters.minPrevalence || 0}</span>
+            <input type="range" min="0" max="100" step="1"
+              value={Math.round(Math.log2((filters.minPrevalence || 0) + 1) / Math.log2(maxPrev + 1) * 100)}
+              oninput={(e) => { filters.minPrevalence = Math.round(Math.pow(2, +e.target.value / 100 * Math.log2(maxPrev + 1)) - 1); }}
+              class="mt-1 w-full accent-blue-500" />
           </label>
 
           {#if store.network?.edges?.length > 0}
@@ -367,8 +375,11 @@
       {#if sections.heatmap}
         <div class="space-y-3 px-3 pb-3">
           <label class="block">
-            <span class="text-xs text-slate-400">Min max(RA): {(filters.heatmapMinMaxRA ?? 1).toFixed(1)}%</span>
-            <input type="range" min="0" max="10" step="0.1" bind:value={filters.heatmapMinMaxRA} class="mt-1 w-full accent-blue-500" />
+            <span class="text-xs text-slate-400">Min max(RA): {(filters.heatmapMinMaxRA ?? 1).toFixed(2)}%</span>
+            <input type="range" min="0" max="100" step="1"
+              value={Math.round(Math.log2((filters.heatmapMinMaxRA ?? 1) + 1) / Math.log2(101) * 100)}
+              oninput={(e) => { filters.heatmapMinMaxRA = Math.pow(2, +e.target.value / 100 * Math.log2(101)) - 1; }}
+              class="mt-1 w-full accent-blue-500" />
           </label>
 
           <label class="block">
