@@ -3,8 +3,16 @@ name: Build and push container
 on:
   push:
     branches: [main]
+    # The image does `COPY . /pipeline/`, so pipeline code and the entrypoint are
+    # baked in — a change to any of them must rebuild, not just Dockerfile/envs.
     paths:
       - 'Dockerfile'
+      - 'entrypoint.sh'
+      - 'main.nf'
+      - 'nextflow.config'
+      - 'modules/**'
+      - 'bin/**'
+      - 'primers/**'
       - 'envs/**'
       - '.github/workflows/container.yml'
   workflow_dispatch:
