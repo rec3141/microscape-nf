@@ -29,16 +29,17 @@ RUN curl -fsSL https://get.nextflow.io | bash \
 COPY envs/ /tmp/envs/
 
 # Create Python environment (papa2 + microscape from bioconda)
+# No `mamba clean` here: /opt/conda/pkgs is a BuildKit cache mount (already
+# excluded from the image layer), and cleaning it fails with "Device or
+# resource busy" because it's a live mount point.
 RUN --mount=type=cache,target=/opt/conda/pkgs \
     mamba env create -y -p /opt/conda/envs/microscape-python \
-        -f /tmp/envs/python.yml \
-    && mamba clean -afy
+        -f /tmp/envs/python.yml
 
 # Create R environment (dada2, DECIPHER from bioconda)
 RUN --mount=type=cache,target=/opt/conda/pkgs \
     mamba env create -y -p /opt/conda/envs/microscape-r \
-        -f /tmp/envs/r.yml \
-    && mamba clean -afy
+        -f /tmp/envs/r.yml
 
 # Put both envs on PATH so tools are available without conda activate
 ENV PATH="/opt/conda/envs/microscape-python/bin:/opt/conda/envs/microscape-r/bin:${PATH}"
