@@ -41,5 +41,18 @@ export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 export NXF_OFFLINE=true
+# Nextflow 26.04.x defaults to a strict language parser (v2) that rejects the
+# pipeline's config/scripts; use the legacy parser until they're ported.
+export NXF_SYNTAX_PARSER=v1
+
+# NXF_HOME must be writable — Nextflow creates plugins/ (and history, etc.) under
+# it at startup — but the framework jar is baked read-only at /opt/nextflow, which
+# an immutable SIF makes unwritable. Point NXF_HOME at a fresh writable dir and
+# symlink the baked framework in, so the jar is found (no download) and the
+# writable subdirs succeed.
+_NXF_RUNTIME="$(mktemp -d)/.nextflow"
+mkdir -p "$_NXF_RUNTIME"
+ln -sfn /opt/nextflow/framework "$_NXF_RUNTIME/framework"
+export NXF_HOME="$_NXF_RUNTIME"
 
 exec nextflow -c /pipeline/docker.config "$@"
