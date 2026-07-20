@@ -32,4 +32,14 @@ if [ -d "$OUTDIR" ] && [ ! -w "$OUTDIR" ]; then
     exit 1
 fi
 
+# Portability: a host may forward a CA-bundle path that doesn't exist in this
+# Debian image (e.g. apptainer forwarding RHEL's /etc/pki/... from an HPC host),
+# which breaks any HTTPS with "curl (77)". Force the in-image path. Run Nextflow
+# offline — its framework jar is baked at NXF_HOME=/opt/nextflow and the pipeline
+# uses no plugins — so compute nodes never attempt a download.
+export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+export NXF_OFFLINE=true
+
 exec nextflow -c /pipeline/docker.config "$@"

@@ -19,11 +19,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         procps curl default-jre-headless build-essential zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Nextflow
+# Install Nextflow and bake its framework jar into the image.
+# The launcher self-downloads the framework jar on first run; on offline HPC
+# compute nodes that fails. Caching under $HOME/.nextflow is not portable
+# because apptainer overrides HOME at runtime (to the host home), orphaning the
+# cache — so pin NXF_HOME to a fixed in-image path and bake the jar there. The
+# second, network-free invocation verifies the bake so the build fails loudly
+# if the offline path ever regresses.
+ENV NXF_HOME=/opt/nextflow
 RUN curl -fsSL https://get.nextflow.io | bash \
     && mv nextflow /usr/local/bin/ \
     && chmod +x /usr/local/bin/nextflow \
-    && nextflow -version
+    && nextflow -version \
+    && chmod -R a+rX "$NXF_HOME" \
+    && NXF_OFFLINE=true nextflow -version
 
 # Copy environment specs
 COPY envs/ /tmp/envs/
