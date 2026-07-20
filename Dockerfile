@@ -11,10 +11,12 @@ LABEL org.opencontainers.image.source="https://github.com/rec3141/microscape-nf"
 LABEL org.opencontainers.image.description="Microscape amplicon sequencing pipeline"
 
 # System dependencies
-# default-jre-headless: Nextflow needs a JVM at both build time (nextflow -version
-# below) and runtime; the miniforge3 base ships no Java.
+# - default-jre-headless: Nextflow needs a JVM at both build time (nextflow
+#   -version below) and runtime; the miniforge3 base ships no Java.
+# - build-essential: the papa2 pip package compiles a C lib (`make libpapa2.so`)
+#   during its wheel build, so make + a C compiler must be present.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        procps curl default-jre-headless \
+        procps curl default-jre-headless build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Nextflow
