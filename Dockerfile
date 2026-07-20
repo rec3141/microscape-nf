@@ -11,8 +11,10 @@ LABEL org.opencontainers.image.source="https://github.com/rec3141/microscape-nf"
 LABEL org.opencontainers.image.description="Microscape amplicon sequencing pipeline"
 
 # System dependencies
+# default-jre-headless: Nextflow needs a JVM at both build time (nextflow -version
+# below) and runtime; the miniforge3 base ships no Java.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        procps curl \
+        procps curl default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Nextflow
