@@ -13,6 +13,7 @@ on:
       - 'modules/**'
       - 'bin/**'
       - 'primers/**'
+      - 'viz/**'
       - 'envs/**'
       - '.github/workflows/container.yml'
   workflow_dispatch:
