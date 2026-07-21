@@ -224,9 +224,15 @@ workflow {
                 .map { meta, r1, r2 -> [meta, r1, r2] }
         }
     } else if (params.primers_fwd && params.primers_rev) {
-        ch_with_primers = ch_demuxed.map { meta, r1, r2 ->
-            [meta, r1, r2, file(params.primers_fwd)]
-        }
+        // REMOVE_PRIMERS applies one primer file to both reads (cutadapt -g/-G
+        // selects the matching primer per read), exactly like the samplesheet and
+        // auto-detect paths whose primers-*.fa hold both fwd and rev. Passing only
+        // primers_fwd here trimmed R2 with the forward primer, so cutadapt's
+        // --discard-untrimmed dropped ~every pair. Combine fwd + rev into one file.
+        ch_primers_combined = Channel
+            .fromPath([params.primers_fwd, params.primers_rev])
+            .collectFile(name: 'primers_combined.fa')
+        ch_with_primers = ch_demuxed.combine(ch_primers_combined)
         REMOVE_PRIMERS(ch_with_primers)
         ch_trimmed = REMOVE_PRIMERS.out.reads
             .map { meta, r1, r2 ->
