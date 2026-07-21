@@ -19,6 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         procps curl default-jre-headless build-essential zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Node.js (NodeSource LTS) for BUNDLE_VIZ_SITE, which builds the static viz SPA
+# that microscape.app hosts (vite build). The viz app's deps are pre-installed
+# below so the build runs offline on HPC compute nodes.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Nextflow and bake its framework jar into the image.
 # The launcher self-downloads the framework jar on first run; on offline HPC
 # compute nodes that fails. Caching under $HOME/.nextflow is not portable
@@ -56,6 +63,10 @@ ENV PATH="/opt/conda/envs/microscape-python/bin:/opt/conda/envs/microscape-r/bin
 # Copy pipeline code
 COPY . /pipeline/
 RUN chmod +x /pipeline/bin/*.R /pipeline/entrypoint.sh
+
+# Pre-install the viz app's node_modules so BUNDLE_VIZ_SITE's `npm install
+# --prefer-offline` + `vite build` succeed on offline compute nodes.
+RUN cd /pipeline/viz && npm ci --no-audit --no-fund
 
 # Create docker.config that disables per-process conda (tools are on PATH)
 RUN printf 'conda.enabled = false\n' > /pipeline/docker.config
