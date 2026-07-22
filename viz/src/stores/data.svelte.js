@@ -315,12 +315,12 @@ export async function loadData() {
 
   try {
     const [samples, asvs, counts, network, taxonomy, treeNewick] = await Promise.all([
-      fetchJson('/data/samples.json').catch(() => []),
-      fetchJson('/data/asvs.json').catch(() => []),
-      fetchJson('/data/counts.json').catch(() => ({ data: [], samples: [], asvs: [] })),
-      fetchJson('/data/network.json').catch(() => ({ edges: [] })),
-      fetchJson('/data/taxonomy.json').catch(() => ({})),
-      fetch('/data/tree.nwk').then(r => r.ok ? r.text() : '').catch(() => ''),
+      fetchJson('./data/samples.json').catch(() => []),
+      fetchJson('./data/asvs.json').catch(() => []),
+      fetchJson('./data/counts.json').catch(() => ({ data: [], samples: [], asvs: [] })),
+      fetchJson('./data/network.json').catch(() => ({ edges: [] })),
+      fetchJson('./data/taxonomy.json').catch(() => ({})),
+      fetch('./data/tree.nwk').then(r => r.ok ? r.text() : '').catch(() => ''),
     ]);
 
     store.samples = samples;
@@ -331,7 +331,7 @@ export async function loadData() {
     store.treeNewick = treeNewick.trim();
 
     // Load heatmap data (async, non-blocking)
-    fetch('/data/heatmap.json.gz')
+    fetch('./data/heatmap.json.gz')
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) {
@@ -342,7 +342,7 @@ export async function loadData() {
       .catch(() => {});
 
     // Load pre-aggregated counts
-    fetch('/data/aggregated_counts.json.gz')
+    fetch('./data/aggregated_counts.json.gz')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) store.aggCounts = d; })
       .catch(() => {});
