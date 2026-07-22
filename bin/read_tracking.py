@@ -80,6 +80,29 @@ def main():
             + f"\t{100 * totals['reads_after_primer'] / raw:.1f}"
             + f"\t{100 * totals['reads_after_filter'] / raw:.1f}\n"
         )
+    # Also emit JSON next to the TSV for the viz Provenance tab. Written as
+    # data/provenance.json when placed in the viz payload.
+    import json
+    json_path = os.path.join(os.path.dirname(out_path) or ".", "provenance.json")
+    stages = [
+        ("raw", "Raw FASTQ", "reads_raw"),
+        ("primer", "After primer removal", "reads_after_primer"),
+        ("filter", "After quality filter", "reads_after_filter"),
+    ]
+    payload = {
+        "stages": [{"id": sid, "label": lab} for sid, lab, _ in stages],
+        "total": {sid: totals[col] for sid, _, col in stages},
+        "samples": {
+            acc: {sid: samples[acc].get(col, 0) for sid, _, col in stages}
+            for acc in sorted(samples)
+        },
+    }
+    try:
+        with open(json_path, "w") as jf:
+            json.dump(payload, jf)
+    except OSError as e:
+        print(f"[WARN] could not write {json_path}: {e}")
+
     print(f"[INFO] read_tracking: {len(samples)} samples, "
           f"{totals['reads_raw']:,} raw reads -> "
           f"{totals['reads_after_primer']:,} after primers")

@@ -5,6 +5,7 @@
     { id: 'phylogeny', label: 'Phylogeny', hash: '#phylogeny' },
     { id: 'heatmap', label: 'Heatmap', hash: '#heatmap' },
     { id: 'tables', label: 'Data Tables', hash: '#tables' },
+    { id: 'provenance', label: 'Provenance', hash: '#provenance' },
   ];
 
   let { activeTab = 'samples' } = $props();

@@ -14,6 +14,7 @@ export const store = $state({
   network: { edges: [] },
   taxonomy: {},
   treeNewick: '',      // phylogeny (NJ) tree
+  provenance: null,    // per-step read counts (data/provenance.json)
   heatmapNewick: '',   // Ward clustering tree (from heatmap data)
   heatmap: null,
   aggCounts: null,     // Pre-aggregated counts per taxonomy level
@@ -349,13 +350,14 @@ export async function loadData() {
   store.error = null;
 
   try {
-    const [samples, asvs, counts, network, taxonomy, treeNewick] = await Promise.all([
+    const [samples, asvs, counts, network, taxonomy, treeNewick, provenance] = await Promise.all([
       fetchJson('./data/samples.json').catch(() => []),
       fetchJson('./data/asvs.json').catch(() => []),
       fetchJson('./data/counts.json').catch(() => ({ data: [], samples: [], asvs: [] })),
       fetchJson('./data/network.json').catch(() => ({ edges: [] })),
       fetchJson('./data/taxonomy.json').catch(() => ({})),
       fetch('./data/tree.nwk').then(r => r.ok ? r.text() : '').catch(() => ''),
+      fetchJson('./data/provenance.json').catch(() => null),
     ]);
 
     store.samples = samples;
@@ -364,6 +366,7 @@ export async function loadData() {
     store.network = network;
     store.taxonomy = taxonomy;
     store.treeNewick = treeNewick.trim();
+    store.provenance = provenance || null;
 
     // Load heatmap data (async, non-blocking)
     fetch('./data/heatmap.json.gz')

@@ -7,6 +7,7 @@
   import PhyloTreeView from './views/PhyloTreeView.svelte';
   import HeatmapView from './views/HeatmapView.svelte';
   import TablesView from './views/TablesView.svelte';
+  import ProvenanceView from './views/ProvenanceView.svelte';
   import { store, loadData } from './stores/data.svelte.js';
 
   let activeTab = $state('samples');
@@ -57,7 +58,7 @@
 
   function updateTab() {
     const hash = window.location.hash.replace('#', '') || 'samples';
-    if (['samples', 'network', 'phylogeny', 'heatmap', 'tables'].includes(hash)) {
+    if (['samples', 'network', 'phylogeny', 'heatmap', 'tables', 'provenance'].includes(hash)) {
       activeTab = hash;
     }
   }
@@ -107,6 +108,8 @@
           <HeatmapView {filters} />
         {:else if activeTab === 'tables'}
           <TablesView {filters} />
+        {:else if activeTab === 'provenance'}
+          <ProvenanceView />
         {/if}
       {/if}
     </main>
