@@ -65,6 +65,41 @@ function generatePalette(n) {
  * Build a color map: taxon name → hex color for the top N taxa at a level.
  * Returns { colorMap: {name: hex}, ranked: [{name, count, color}] }
  */
+/**
+ * Taxon names at `level` whose ASVs' full lineage matches `taxonFilter`.
+ *
+ * Needed because a drill-down filter names an ANCESTOR ("Bacteria") while the
+ * pre-aggregated counts are keyed by a DESCENDANT ("Pseudomonadota"). Matching
+ * the filter against the child name drops every point. Returns null when there
+ * is no filter (caller should not filter at all).
+ */
+export function taxaMatchingFilter(level, taxonFilter = '') {
+  if (!taxonFilter || !level || level === '_asv' || level === 'group') return null;
+  const db = Object.keys(store.taxonomy)[0];
+  if (!db || !store.taxonomy[db]) return null;
+
+  const levels = store.taxonomy[db].levels || [];
+  const assignments = store.taxonomy[db].assignments || {};
+  const levelIdx = levels.indexOf(level);
+  if (levelIdx < 0) return null;
+
+  let re;
+  try { re = new RegExp(taxonFilter, 'i'); } catch { re = null; }
+  const lower = taxonFilter.toLowerCase();
+
+  const out = new Set();
+  for (const asvId in assignments) {
+    const vals = assignments[asvId] || [];
+    const fullTax = vals.filter(Boolean).join(';');
+    const match = re
+      ? (re.test(fullTax) || re.test(asvId))
+      : (fullTax.toLowerCase().includes(lower) || asvId.toLowerCase().includes(lower));
+    if (match && vals[levelIdx]) out.add(vals[levelIdx]);
+  }
+  return out;
+}
+
+
 export function buildTaxColorMap(level, taxonFilter = '') {
   const db = Object.keys(store.taxonomy)[0];
   if (!db || !store.taxonomy[db]) return { colorMap: {}, ranked: [] };
