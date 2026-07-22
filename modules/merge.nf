@@ -13,6 +13,10 @@ process MERGE_SEQTABS {
     tag "merge-all"
     label 'process_medium'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
+    // Publish the stats: without them the read/sample attrition between
+    // denoising and the final table is invisible in the results, which made
+    // a 218k -> 51k read drop impossible to attribute after the fact.
+    publishDir "${params.outdir}/seqtab_final", mode: 'copy', pattern: '*_stats.tsv'
 
     input:
     path(seqtab_files)
@@ -37,6 +41,10 @@ process REMOVE_CHIMERAS {
     tag "chimera-removal"
     label 'process_high'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
+    // Publish the stats: without them the read/sample attrition between
+    // denoising and the final table is invisible in the results, which made
+    // a 218k -> 51k read drop impossible to attribute after the fact.
+    publishDir "${params.outdir}/seqtab_final", mode: 'copy', pattern: '*_stats.tsv'
 
     input:
     path(seqtab)
