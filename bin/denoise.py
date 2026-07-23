@@ -81,6 +81,13 @@ with open(errF_path, "rb") as f:
 with open(errR_path, "rb") as f:
     errR = pickle.load(f)
 
+# LEARN_ERRORS emits a sentinel when it couldn't build a model for the plate.
+# Without a usable error model the samples can't be denoised — drop them via an
+# empty seqtab (visible in the provenance) rather than crashing.
+if (isinstance(errF, dict) and errF.get("__learn_errors_failed__")) or \
+   (isinstance(errR, dict) and errR.get("__learn_errors_failed__")):
+    write_empty_seqtab("no usable error model (learn_errors sentinel)")
+
 # ---------------------------------------------------------------------------
 # Discover filtered FASTQ files
 # ---------------------------------------------------------------------------

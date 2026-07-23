@@ -41,6 +41,33 @@ if len(sys.argv) < 3:
 plate_id = sys.argv[1]
 cpus     = int(sys.argv[2])
 
+# Marker written in place of a real error model when learning is impossible
+# (too few reads, degenerate input). DENOISE recognises it and emits an empty
+# seqtab for the plate, so the samples are dropped *visibly* in the provenance
+# rather than silently vanishing when the join drops an unmatched plate.
+LEARN_FAILED_SENTINEL = {"__learn_errors_failed__": True}
+
+
+def write_sentinel_and_exit(reason):
+    """Emit sentinel error models + a placeholder PDF and exit 0.
+
+    A hard failure here is silently destructive: LEARN_ERRORS runs under
+    errorStrategy 'ignore', so a failed plate is dropped from the error-model
+    channel and the downstream join quietly discards all its samples.
+    """
+    print(f"[WARN] Plate {plate_id}: {reason} — emitting sentinel error model",
+          file=sys.stderr)
+    for suffix in ("errF", "errR"):
+        with open(f"{plate_id}_{suffix}.pkl", "wb") as fh:
+            pickle.dump(LEARN_FAILED_SENTINEL, fh)
+    from matplotlib.backends.backend_pdf import PdfPages
+    with PdfPages(f"{plate_id}_error_rates.pdf") as pdf:
+        fig = plt.figure(figsize=(6, 2)); plt.axis("off")
+        plt.text(0.5, 0.5, f"No error model for plate {plate_id}\n({reason})",
+                 ha="center", va="center")
+        pdf.savefig(fig); plt.close(fig)
+    sys.exit(0)
+
 # ---------------------------------------------------------------------------
 # Discover filtered FASTQ files in the working directory
 # ---------------------------------------------------------------------------
@@ -78,9 +105,7 @@ fwd_files = [p[0] for p in valid_pairs]
 rev_files = [p[1] for p in valid_pairs]
 
 if len(fwd_files) == 0:
-    print(f"[ERROR] No valid filtered FASTQ files found for plate {plate_id}",
-          file=sys.stderr)
-    sys.exit(1)
+    write_sentinel_and_exit("no valid filtered FASTQ files")
 
 print(f"[INFO] Plate {plate_id} : learning error rates from "
       f"{len(fwd_files)} samples")
@@ -98,8 +123,11 @@ nbases = float(os.environ.get("DADA2_NBASES", "1e8"))
 print(f"[INFO] Using {nbases:.0e} bases for error learning "
       f"({len(fwd_files)} fwd + {len(rev_files)} rev files available)")
 
-errF = dada2py.learn_errors(fwd_files, nbases=nbases)
-errR = dada2py.learn_errors(rev_files, nbases=nbases)
+try:
+    errF = dada2py.learn_errors(fwd_files, nbases=nbases)
+    errR = dada2py.learn_errors(rev_files, nbases=nbases)
+except Exception as e:
+    write_sentinel_and_exit(f"learn_errors failed: {e}")
 
 with open(f"{plate_id}_errF.pkl", "wb") as f:
     pickle.dump(errF, f)
