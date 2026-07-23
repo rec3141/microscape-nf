@@ -787,18 +787,38 @@ def main():
         else:
             log_warn(f"Metadata file not found: {metadata_path}")
 
-    sample_tsne = load_pickle(sample_tsne_path)
-    seq_tsne = load_pickle(seq_tsne_path)
+    # t-SNE coords are an optional enhancement: CLUSTER_TSNE runs under
+    # errorStrategy 'ignore', so its output may be a `NO_*` sentinel (the
+    # channel was empty). An empty frame is fine — build_samples/build_asvs
+    # already default un-located points to the origin.
+    def load_optional(path, label, cols):
+        if os.path.basename(path).startswith("NO_") or not os.path.isfile(path):
+            log_warn(f"No {label} ({os.path.basename(path)}) — this view will be degraded")
+            return pd.DataFrame(columns=cols)
+        try:
+            return load_pickle(path)
+        except Exception as e:
+            log_warn(f"Failed to load {label} ({path}): {e}")
+            return pd.DataFrame(columns=cols)
 
-    # Load network (may be empty)
+    sample_tsne = load_optional(sample_tsne_path, "sample t-SNE", ["label", "x", "y"])
+    seq_tsne = load_optional(seq_tsne_path, "ASV t-SNE", ["label", "x", "y"])
+
+    # Load network (optional — empty/sentinel yields a network with no edges)
     network_df = None
-    if os.path.isfile(network_path):
-        network_df = load_pickle(network_path)
+    if os.path.isfile(network_path) and not os.path.basename(network_path).startswith("NO_"):
+        try:
+            network_df = load_pickle(network_path)
+        except Exception as e:
+            log_warn(f"Failed to load network ({network_path}): {e}")
+            network_df = None
         if isinstance(network_df, pd.DataFrame):
             log_info(f"Network: {len(network_df)} edges")
-        else:
+        elif network_df is not None:
             log_warn(f"Network file has unexpected type: {type(network_df)}")
             network_df = None
+    else:
+        log_warn(f"No network ({os.path.basename(network_path)}) — ASV network will be empty")
 
     # --- Build outputs ---
 

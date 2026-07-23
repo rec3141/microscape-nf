@@ -380,14 +380,18 @@ workflow {
             .flatten()
             .collect()
 
+        // t-SNE and network are optional enhancements running under
+        // errorStrategy 'ignore'. Feed sentinels when their channels are empty
+        // (the process failed/was skipped) so BUILD_VIZ still runs — the viz
+        // just loses scatter coords / network edges instead of vanishing.
         BUILD_VIZ(
             FILTER_SEQTAB.out.seqtab,
             RENORMALIZE.out.merged,
             ch_tax_files,
             ch_metadata.ifEmpty(file('NO_METADATA')),
-            CLUSTER_TSNE.out.sample_tsne,
-            CLUSTER_TSNE.out.seq_tsne,
-            NETWORK_SPARCC.out.correlations
+            CLUSTER_TSNE.out.sample_tsne.ifEmpty(file('NO_SAMPLE_TSNE')),
+            CLUSTER_TSNE.out.seq_tsne.ifEmpty(file('NO_SEQ_TSNE')),
+            NETWORK_SPARCC.out.correlations.ifEmpty(file('NO_NETWORK'))
         )
 
         // 13. Optional: bundle static viz site (requires Node.js)
