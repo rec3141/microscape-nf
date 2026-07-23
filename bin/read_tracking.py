@@ -44,7 +44,7 @@ STAGES = [
     ("denoise", "After denoising",       "reads_after_denoise"),
     ("merge",   "After merge",           "reads_after_merge"),
     ("chimera", "After chimera removal",  "reads_after_chimera"),
-    ("final",   "Final table",           "reads_final"),
+    ("final",   "After table filter",     "reads_final"),
 ]
 
 
