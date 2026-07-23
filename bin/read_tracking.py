@@ -162,11 +162,34 @@ def main():
             + f"\t{100 * totals['reads_final'] / raw:.1f}\n"
         )
 
+    # Attrition guard: flag any stage that loses more than half the samples that
+    # entered it. Expected attrition (filter reads, prevalence pruning) stays
+    # well under this; a silent 75% DENOISE->MERGE loss would trip it. We warn
+    # loudly and record it in the provenance — never fail the run, so a sparse
+    # but real dataset still produces (and deploys) a result.
+    LOSS_FRACTION = 0.5
+    stage_samples = {sid: sum(1 for acc in samples if samples[acc].get(col, 0) > 0)
+                     for sid, _, col in STAGES}
+    warnings = []
+    prev = None
+    for sid, lab, _ in STAGES:
+        n = stage_samples[sid]
+        if prev and prev[1] > 0 and n < prev[1] * (1 - LOSS_FRACTION):
+            lost = prev[1] - n
+            msg = (f"{lost}/{prev[1]} samples ({100 * lost / prev[1]:.0f}%) lost "
+                   f"between '{prev[0]}' and '{sid}'")
+            warnings.append({"stage": sid, "message": msg})
+            print(f"[WARN] read_tracking: {msg} — inspect the provenance funnel",
+                  file=sys.stderr)
+        prev = (sid, n)
+
     # Provenance JSON for the viz Provenance tab. It must land in viz/ (deployed
     # as data/provenance.json); fall back to the tsv's dir if viz/ isn't there.
     payload = {
         "stages": [{"id": sid, "label": lab} for sid, lab, _ in STAGES],
         "total": {sid: totals[col] for sid, _, col in STAGES},
+        "sample_counts": stage_samples,
+        "warnings": warnings,
         "samples": {
             acc: {sid: samples[acc].get(col, 0) for sid, _, col in STAGES}
             for acc in sorted(samples)
