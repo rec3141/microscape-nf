@@ -110,3 +110,9 @@ stats = pd.DataFrame([{
     "nonzero_cells": len(dt),
 }])
 stats.to_csv("merge_stats.tsv", sep="\t", index=False)
+
+# Per-sample read counts after merge — feeds the provenance tracker. Comparing
+# this against the denoise stage (published per-sample seqtabs) is what exposes
+# any sample lost between DENOISE and MERGE.
+(dt.groupby("sample")["count"].sum().rename("reads")
+   .reset_index().to_csv("merge_sample_reads.tsv", sep="\t", index=False))
