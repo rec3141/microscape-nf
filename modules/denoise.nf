@@ -37,6 +37,7 @@ process AUTO_TRIM {
     """
     microscape auto-trim "." \
         --min-quality ${params.auto_trim_min_quality} \
+        --min-length ${params.auto_trim_min_length} \
         --output ${plate_id}_auto_trim.tsv \
         --verbose
 
