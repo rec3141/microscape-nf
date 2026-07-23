@@ -4,6 +4,7 @@
   import { store } from '../stores/data.svelte.js';
 
   let plotDiv = $state(null);
+  let heatDiv = $state(null);
   let selected = $state('__all__');
 
   const prov = $derived(store.provenance);
@@ -65,11 +66,55 @@
     );
   }
 
-  onMount(draw);
+  // All-samples heatmap: rows = samples, columns = stages, colour = log10(reads).
+  // Gives a one-glance view of the whole dataset's funnel — a sample that
+  // collapses at a stage (e.g. an outlier stripped by the prevalence filter)
+  // shows up as a dark cell in that column. Rows are ordered by overall
+  // retention so the worst-retained samples cluster together.
+  function drawHeat() {
+    if (!heatDiv || selected !== '__all__' || !stages.length || !sampleIds.length) return;
+    const rawId = stages[0].id, finalId = stages[stages.length - 1].id;
+    const retention = (id) => {
+      const r = prov.samples[id][rawId] || 0;
+      return r ? (prov.samples[id][finalId] || 0) / r : 0;
+    };
+    const order = [...sampleIds].sort((a, b) => retention(a) - retention(b));
+    const x = stages.map(s => s.label);
+    const z = order.map(id => stages.map(s => {
+      const n = prov.samples[id][s.id] ?? 0;
+      return n > 0 ? Math.log10(n) : null;   // null → blank cell for zero reads
+    }));
+    const raw = order.map(id => stages.map(s => prov.samples[id][s.id] ?? 0));
+    Plotly.react(
+      heatDiv,
+      [{
+        type: 'heatmap',
+        x, y: order, z,
+        customdata: raw,
+        colorscale: 'Viridis',
+        hoverongaps: false,
+        hovertemplate: '%{y}<br>%{x}<br>%{customdata:,} reads<extra></extra>',
+        colorbar: { title: { text: 'log₁₀(reads)', side: 'right' }, thickness: 12,
+                    tickfont: { color: '#94a3b8', size: 10 } },
+      }],
+      {
+        margin: { l: 110, r: 10, t: 10, b: 70 },
+        plot_bgcolor: 'rgba(2, 6, 15, 1)',
+        paper_bgcolor: 'rgba(2, 6, 15, 1)',
+        font: { color: '#94a3b8', size: 11 },
+        xaxis: { tickangle: -30, automargin: true },
+        yaxis: { automargin: true, autorange: 'reversed' },
+      },
+      { responsive: true, displaylogo: false },
+    );
+  }
+
+  onMount(() => { draw(); drawHeat(); });
   $effect(() => { rows; draw(); });
+  $effect(() => { selected; stages; sampleIds; drawHeat(); });
 </script>
 
-<div class="flex h-full flex-col gap-3 p-3">
+<div class="flex h-full flex-col gap-3 overflow-y-auto p-3">
   {#if !prov}
     <div class="flex flex-1 items-center justify-center text-sm text-slate-500">
       No provenance data — <code class="mx-1">data/provenance.json</code> was not produced for this run.
@@ -95,7 +140,20 @@
       {/if}
     </div>
 
-    <div bind:this={plotDiv} class="min-h-0 flex-1"></div>
+    <div bind:this={plotDiv} class="h-72 shrink-0"></div>
+
+    {#if selected === '__all__' && sampleIds.length}
+      <div class="shrink-0">
+        <p class="mb-1 text-xs text-slate-400">
+          All samples &middot; log<sub>10</sub>(reads) at each stage
+          <span class="text-slate-500">— rows sorted by retention (lowest first)</span>
+        </p>
+        <div
+          bind:this={heatDiv}
+          style="height: {Math.min(700, 70 + sampleIds.length * 16)}px"
+        ></div>
+      </div>
+    {/if}
 
     <div class="max-h-40 overflow-y-auto">
       <table class="w-full text-xs">
