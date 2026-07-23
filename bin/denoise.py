@@ -45,6 +45,26 @@ errR_path   = sys.argv[3]
 min_overlap = int(sys.argv[4])
 cpus        = int(sys.argv[5])
 
+
+def write_empty_seqtab(reason):
+    """Emit a valid, empty seqtab and exit 0 instead of crashing.
+
+    A hard exit here is poison: DENOISE runs under errorStrategy 'ignore', and a
+    single ignored task prematurely closes the DENOISE output channel, so the
+    downstream `.collect()` fires MERGE with only the seqtabs finished so far —
+    silently dropping every later sample. Degenerate inputs (too few reads to
+    merge, dada() failures) must therefore succeed with an empty table, which is
+    then dropped cleanly at the filter step while still being counted in the
+    provenance. The sample row (no ASV columns) is kept so it shows up with 0.
+    """
+    print(f"[WARN] Plate {plate_id}: {reason} — emitting empty seqtab", file=sys.stderr)
+    empty = pd.DataFrame(columns=["sample", "sequence", "count"])
+    with open(f"{plate_id}.seqtab.pkl", "wb") as f:
+        pickle.dump(empty, f)
+    with open(f"{plate_id}.seqtab.tsv", "w") as f:
+        f.write("sample\n" + f"{plate_id}\n")
+    sys.exit(0)
+
 # ---------------------------------------------------------------------------
 # Load pre-learned error models
 # ---------------------------------------------------------------------------
@@ -75,8 +95,7 @@ sample_names = [re.sub(r"_R1\.filt\.fastq\.gz$", "", os.path.basename(f))
                 for f in fwd_files]
 
 if len(fwd_files) == 0:
-    print("[ERROR] No valid filtered files found for denoising", file=sys.stderr)
-    sys.exit(1)
+    write_empty_seqtab("no valid filtered files found")
 
 print(f"[INFO] Plate {plate_id} : denoising {len(fwd_files)} samples")
 
@@ -95,16 +114,15 @@ all_merged = {}  # sample_name -> {merged_seq: abundance}
 for i, sample_name in enumerate(sample_names):
     print(f"[INFO] Processing: {sample_name}")
 
-    # Dereplicate: collapse identical reads, track abundances
-    derepF = dada2py.derep_fastq(fwd_files[i])
-    derepR = dada2py.derep_fastq(rev_files[i])
-
-    # Denoise: apply error model to distinguish real variants from errors
+    # Dereplicate + denoise. Any failure here (degenerate/tiny sample) must not
+    # crash the task — see write_empty_seqtab. Skip the sample instead.
     try:
+        derepF = dada2py.derep_fastq(fwd_files[i])
+        derepR = dada2py.derep_fastq(rev_files[i])
         ddF = dada2py.dada(derepF, err=errF)
         ddR = dada2py.dada(derepR, err=errR)
     except Exception as e:
-        print(f"[WARNING] {sample_name}: dada() failed: {e}")
+        print(f"[WARNING] {sample_name}: derep/dada() failed: {e}")
         continue
 
     # Check for denoised output
@@ -126,11 +144,9 @@ for i, sample_name in enumerate(sample_names):
     if accepted:
         all_merged[sample_name] = accepted
 
-# Drop samples that produced no merged reads
+# Drop samples that produced no merged reads — empty table, never a crash.
 if len(all_merged) == 0:
-    print(f"[ERROR] No merged reads produced for plate {plate_id}",
-          file=sys.stderr)
-    sys.exit(1)
+    write_empty_seqtab("no merged reads produced")
 
 # ---------------------------------------------------------------------------
 # Build sequence table
