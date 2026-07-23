@@ -58,7 +58,15 @@ def write_empty_seqtab(reason):
     provenance. The sample row (no ASV columns) is kept so it shows up with 0.
     """
     print(f"[WARN] Plate {plate_id}: {reason} — emitting empty seqtab", file=sys.stderr)
-    empty = pd.DataFrame(columns=["sample", "sequence", "count"])
+    # Explicit dtypes matter: an all-object empty frame (the pandas default)
+    # upcasts `count` to object when concatenated in MERGE, which then poisons
+    # the numeric matrices downstream (t-SNE fails with "Unsupported dtype
+    # object"). Keep count int64 so the merge stays numeric.
+    empty = pd.DataFrame({
+        "sample": pd.Series([], dtype="object"),
+        "sequence": pd.Series([], dtype="object"),
+        "count": pd.Series([], dtype="int64"),
+    })
     with open(f"{plate_id}.seqtab.pkl", "wb") as f:
         pickle.dump(empty, f)
     with open(f"{plate_id}.seqtab.tsv", "w") as f:
