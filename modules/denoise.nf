@@ -40,8 +40,27 @@ process AUTO_TRIM {
         --output ${plate_id}_auto_trim.tsv \
         --verbose
 
-    export TRUNC_FWD=\$(grep trunc_len_fwd ${plate_id}_auto_trim.tsv | cut -f2)
-    export TRUNC_REV=\$(grep trunc_len_rev ${plate_id}_auto_trim.tsv | cut -f2)
+    # Read the auto-detected values (exact key match, before we append anything).
+    RAW_FWD=\$(awk -F'\\t' '\$1=="trunc_len_fwd"{print \$2}' ${plate_id}_auto_trim.tsv)
+    RAW_REV=\$(awk -F'\\t' '\$1=="trunc_len_rev"{print \$2}' ${plate_id}_auto_trim.tsv)
+    LEN_FWD=\$(awk -F'\\t' '\$1=="fwd_read_len"{print \$2}' ${plate_id}_auto_trim.tsv)
+    LEN_REV=\$(awk -F'\\t' '\$1=="rev_read_len"{print \$2}' ${plate_id}_auto_trim.tsv)
+    MIN_LEN=${params.auto_trim_min_length}
+
+    # Enforce a minimum truncation length. A quality-driven short truncation
+    # (e.g. ~30bp on a degraded library) leaves reads unable to overlap, so
+    # mergePairs discards ~100% of reads and the sample silently vanishes at
+    # DENOISE. Floor at MIN_LEN, capped at the actual read length. Issue #4.
+    clamp() { v=\$1; lo=\$2; hi=\$3; [ "\$v" -lt "\$lo" ] && v=\$lo; [ "\$v" -gt "\$hi" ] && v=\$hi; echo "\$v"; }
+    export TRUNC_FWD=\$(clamp "\${RAW_FWD:-0}" "\$MIN_LEN" "\${LEN_FWD:-\$MIN_LEN}")
+    export TRUNC_REV=\$(clamp "\${RAW_REV:-0}" "\$MIN_LEN" "\${LEN_REV:-\$MIN_LEN}")
+
+    # Record the applied values (and whether the floor kicked in) in the tsv so
+    # quality_check reflects what was actually used, not just what was detected.
+    if [ "\$TRUNC_FWD" != "\$RAW_FWD" ] || [ "\$TRUNC_REV" != "\$RAW_REV" ]; then
+        printf 'floored\\ttrue\\ntrunc_len_fwd_applied\\t%s\\ntrunc_len_rev_applied\\t%s\\n' "\$TRUNC_FWD" "\$TRUNC_REV" >> ${plate_id}_auto_trim.tsv
+        echo "[WARN] Auto-trim ${plate_id}: floored trunc fwd \$RAW_FWD->\$TRUNC_FWD rev \$RAW_REV->\$TRUNC_REV (min \$MIN_LEN) — degraded library, expect loss at the quality filter"
+    fi
     echo "[INFO] Auto-trim ${plate_id}: fwd=\$TRUNC_FWD rev=\$TRUNC_REV"
     """
 }
