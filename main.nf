@@ -409,6 +409,54 @@ workflow.onComplete {
 
     println msg
 
+    // Run manifest — record what was actually run (pipeline version, resolved parameters,
+    // per-process tool images, reference databases) so downstream reporting (omc-platform
+    // Methods drafting + agents) can state it instead of "not specified in the outputs".
+    // Published into viz/ alongside provenance.json. (microscape-nf #5)
+    try {
+        def vizDir = new File("${params.outdir}/viz")
+        if (vizDir.exists()) {
+            def manifest = [
+                pipeline            : "${workflow.manifest.name} v${workflow.manifest.version}",
+                revision            : (workflow.revision ?: workflow.commitId ?: null),
+                commit_id           : workflow.commitId,
+                nextflow_version    : "${nextflow.version}",
+                command_line        : workflow.commandLine,
+                started             : "${workflow.start}",
+                completed           : "${workflow.complete}",
+                duration            : "${workflow.duration}",
+                success             : workflow.success,
+                // process -> container image; image tags give tool versions
+                containers          : workflow.container,
+                reference_databases : params.ref_databases,
+                denoise             : (params.denoise_engine ?: params.lang) == 'python' ? 'papa2 (DADA2-compatible)' : 'DADA2 (R)',
+                parameters          : [
+                    lang                 : params.lang,
+                    denoise_engine       : params.denoise_engine,
+                    skip_primer_removal  : params.skip_primer_removal,
+                    primer_error_rate    : params.primer_error_rate,
+                    auto_trim            : params.auto_trim,
+                    auto_trim_min_quality: params.auto_trim_min_quality,
+                    maxEE                : params.maxEE,
+                    truncQ               : params.truncQ,
+                    maxN                 : params.maxN,
+                    truncLen_fwd         : params.truncLen_fwd,
+                    truncLen_rev         : params.truncLen_rev,
+                    min_overlap          : params.min_overlap,
+                    min_seq_length       : params.min_seq_length,
+                    min_reads            : params.min_reads,
+                    min_samples          : params.min_samples,
+                    min_seqs             : params.min_seqs,
+                ],
+            ]
+            new File(vizDir, 'run_manifest.json').text =
+                groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifest))
+            println "[INFO] Wrote run manifest: ${params.outdir}/viz/run_manifest.json"
+        }
+    } catch (Exception e) {
+        println "[WARN] Could not write run_manifest.json: ${e.message}"
+    }
+
     if (!workflow.success) {
         println "[WARNING] Pipeline completed with errors. Check .nextflow.log for details."
     }
