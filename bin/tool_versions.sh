@@ -12,13 +12,20 @@ set -uo pipefail
 
 first_line() { head -n1 2>/dev/null | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
 # Most tools print to stdout; a few (FastTree, mafft) use stderr.
-probe() { { eval "$1"; } 2>&1 | first_line; }
+probe() {
+    # `bin` is the first word of the command; if the shell cannot find it the tool is
+    # ABSENT, which is a different fact from "present but does not report a version".
+    # Merging stderr made "command not found" look like a version banner.
+    local bin=${1%% *}
+    command -v "$bin" >/dev/null 2>&1 || { printf '__ABSENT__'; return; }
+    { eval "$1"; } 2>&1 | first_line
+}
 
 # tool -> command, and a regex to pull the bare version out of a chatty banner
 emit() {
     local name="$1" raw="$2" ver
     ver=$(printf '%s' "$raw" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?([a-z0-9._-]*)?' | head -n1)
-    if [ -z "$raw" ]; then
+    if [ -z "$raw" ] || [ "$raw" = "__ABSENT__" ]; then
         printf '  "%s": null' "$name"
     else
         printf '  "%s": {"version": %s, "reported": "%s"}' "$name" \
@@ -64,10 +71,9 @@ for spec in \
     "cutadapt|cutadapt --version" \
     "mafft|mafft --version" \
     "fasttree|FastTree -expert" \
-    "vsearch|vsearch --version" \
     "python|python --version" \
     "R|R --version" \
-    "nextflow|nextflow -v" \
+    "nextflow|nextflow -version" \
     "dada2|Rscript -e 'cat(as.character(packageVersion(\"dada2\")))'" \
     "decipher|Rscript -e 'cat(as.character(packageVersion(\"DECIPHER\")))'" \
     "ape|Rscript -e 'cat(as.character(packageVersion(\"ape\")))'" \
