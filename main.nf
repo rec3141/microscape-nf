@@ -416,10 +416,40 @@ workflow.onComplete {
     try {
         def vizDir = new File("${params.outdir}/viz")
         if (vizDir.exists()) {
+            // Provenance that survives the container. workflow.commitId is null for
+            // every run launched from the .sif (there is no git repo inside), which is
+            // how this pipeline actually runs — so fall back to the SHA baked in at
+            // build time. scriptId is the MD5 of main.nf and pins the source even when
+            // both of those are missing.
+            def sysEnv = System.getenv()
+            def bakedSha = sysEnv['MICROSCAPE_GIT_SHA']
+            def toolVersions = null
+            try {
+                def probe = new File("${workflow.projectDir}/bin/tool_versions.sh")
+                if (probe.exists()) {
+                    def proc = ["bash", probe.absolutePath].execute()
+                    def out = new StringBuffer(), err = new StringBuffer()
+                    proc.consumeProcessOutput(out, err)
+                    proc.waitForOrKill(120000)
+                    toolVersions = new groovy.json.JsonSlurper().parseText(out.toString())
+                }
+            } catch (Exception e) {
+                println "[WARN] tool version probe failed: ${e.message}"
+            }
+
             def manifest = [
                 pipeline            : "${workflow.manifest.name} v${workflow.manifest.version}",
+                // Null when run from the .sif; bakedSha is then the only real answer.
                 revision            : (workflow.revision ?: workflow.commitId ?: null),
-                commit_id           : workflow.commitId,
+                commit_id           : (workflow.commitId ?: bakedSha),
+                commit_source       : (workflow.commitId ? 'git checkout'
+                                       : (bakedSha ? 'baked into container at build' : 'UNKNOWN')),
+                container_git_ref   : sysEnv['MICROSCAPE_GIT_REF'],
+                container_built     : sysEnv['MICROSCAPE_BUILD_DATE'],
+                // MD5 of main.nf — identifies the source even with no git and no build arg.
+                script_id           : workflow.scriptId,
+                // What each tool actually reported, not what the env spec asked for.
+                tool_versions       : toolVersions,
                 nextflow_version    : "${nextflow.version}",
                 command_line        : workflow.commandLine,
                 started             : "${workflow.start}",
