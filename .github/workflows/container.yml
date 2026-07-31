@@ -7,6 +7,15 @@ on:
       - 'Dockerfile'
       - 'envs/**'
       - '.github/workflows/container.yml'
+      # `COPY . /pipeline/` puts these IN the image, so a change to them changes the
+      # container — but the build did not trigger on them. That is how the shipped .sif
+      # came to hold a main.nf matching no commit while git moved on without it.
+      - 'main.nf'
+      - 'bin/**'
+      - 'nextflow.config'
+      - 'modules/**'
+      - 'workflows/**'
+      - 'subworkflows/**'
   workflow_dispatch:
 
 env:
