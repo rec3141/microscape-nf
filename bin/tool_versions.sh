@@ -27,7 +27,38 @@ emit() {
     fi
 }
 
+# Python packages installed from a git URL report a version string that never changes —
+# microscape has said "0.1.0" across every commit — but PEP 610 writes the actual commit
+# into direct_url.json. That commit is the only real answer for papa2 and microscape,
+# which are the two tools most likely to change the numbers.
+python_packages() {
+    python - <<'PYEOF' 2>/dev/null || printf 'null'
+import json
+try:
+    import importlib.metadata as md
+except ImportError:
+    print("null"); raise SystemExit
+out = {}
+for name in ("microscape", "papa2", "biopython", "scikit-learn", "scipy",
+             "numpy", "pandas", "cutadapt", "matplotlib"):
+    try:
+        d = md.distribution(name)
+    except Exception:
+        continue
+    rec = {"version": d.version, "commit": None, "url": None}
+    try:
+        o = json.loads(d.read_text("direct_url.json") or "{}")
+        rec["url"] = o.get("url")
+        rec["commit"] = (o.get("vcs_info") or {}).get("commit_id")
+    except Exception:
+        pass
+    out[name] = rec
+print(json.dumps(out))
+PYEOF
+}
+
 printf '{\n'
+printf '  "python_packages": %s,\n' "$(python_packages)"
 sep=""
 for spec in \
     "cutadapt|cutadapt --version" \
