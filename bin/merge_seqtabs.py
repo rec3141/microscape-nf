@@ -78,6 +78,11 @@ print("[INFO] Concatenating long tables...")
 dt = pd.concat(long_list, ignore_index=True)
 del long_list
 
+# Defensive: keep counts numeric. A stray object-dtype input (e.g. an empty
+# per-plate table) can upcast the whole column to object under concat, which
+# breaks every numeric consumer downstream (t-SNE, renormalize, viz).
+dt["count"] = pd.to_numeric(dt["count"], errors="coerce").fillna(0).astype("int64")
+
 # ---------------------------------------------------------------------------
 # Aggregate: sum counts for (sample, sequence) pairs that appear on multiple
 # plates (e.g., same sample re-sequenced). In most cases there are no
@@ -110,3 +115,9 @@ stats = pd.DataFrame([{
     "nonzero_cells": len(dt),
 }])
 stats.to_csv("merge_stats.tsv", sep="\t", index=False)
+
+# Per-sample read counts after merge — feeds the provenance tracker. Comparing
+# this against the denoise stage (published per-sample seqtabs) is what exposes
+# any sample lost between DENOISE and MERGE.
+(dt.groupby("sample")["count"].sum().rename("reads")
+   .reset_index().to_csv("merge_sample_reads.tsv", sep="\t", index=False))

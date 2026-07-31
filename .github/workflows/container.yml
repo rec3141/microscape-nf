@@ -3,8 +3,17 @@ name: Build and push container
 on:
   push:
     branches: [main]
+    # The image does `COPY . /pipeline/`, so pipeline code and the entrypoint are
+    # baked in — a change to any of them must rebuild, not just Dockerfile/envs.
     paths:
       - 'Dockerfile'
+      - 'entrypoint.sh'
+      - 'main.nf'
+      - 'nextflow.config'
+      - 'modules/**'
+      - 'bin/**'
+      - 'primers/**'
+      - 'viz/**'
       - 'envs/**'
       - '.github/workflows/container.yml'
       # `COPY . /pipeline/` puts these IN the image, so a change to them changes the
@@ -32,14 +41,21 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@v10
+      # Free disk space IN PLACE on the root filesystem. easimon/maximize-build-space
+      # reclaims space into a separate mount, which does NOT help the Docker Buildx
+      # setup step — it writes multi-arch QEMU layers to /usr/bin on the root FS and
+      # was failing with "no space left on device". jlumbroso/free-disk-space frees
+      # the root FS itself (~30GB), fixing that.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
         with:
-          remove-dotnet: true
-          remove-android: true
-          remove-haskell: true
-          remove-codeql: true
-          remove-docker-images: true
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Checkout
         uses: actions/checkout@v4

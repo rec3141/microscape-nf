@@ -200,6 +200,14 @@ with open("seqtab_orphans.pkl", "wb") as f:
 with open("seqtab_small.pkl", "wb") as f:
     pickle.dump(dt_small, f)
 
+# Per-sample read counts in the final table — the last provenance stage.
+if len(dt) > 0:
+    (dt.groupby("sample")["count"].sum().rename("reads")
+       .reset_index().to_csv("final_sample_reads.tsv", sep="\t", index=False))
+else:
+    with open("final_sample_reads.tsv", "w") as f:
+        f.write("sample\treads\n")
+
 # Wide matrix for compatibility
 print("[INFO] Casting final table to wide matrix...")
 if len(dt) > 0:

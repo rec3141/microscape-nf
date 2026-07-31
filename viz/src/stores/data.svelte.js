@@ -14,6 +14,7 @@ export const store = $state({
   network: { edges: [] },
   taxonomy: {},
   treeNewick: '',      // phylogeny (NJ) tree
+  provenance: null,    // per-step read counts (data/provenance.json)
   heatmapNewick: '',   // Ward clustering tree (from heatmap data)
   heatmap: null,
   aggCounts: null,     // Pre-aggregated counts per taxonomy level
@@ -65,6 +66,41 @@ function generatePalette(n) {
  * Build a color map: taxon name → hex color for the top N taxa at a level.
  * Returns { colorMap: {name: hex}, ranked: [{name, count, color}] }
  */
+/**
+ * Taxon names at `level` whose ASVs' full lineage matches `taxonFilter`.
+ *
+ * Needed because a drill-down filter names an ANCESTOR ("Bacteria") while the
+ * pre-aggregated counts are keyed by a DESCENDANT ("Pseudomonadota"). Matching
+ * the filter against the child name drops every point. Returns null when there
+ * is no filter (caller should not filter at all).
+ */
+export function taxaMatchingFilter(level, taxonFilter = '') {
+  if (!taxonFilter || !level || level === '_asv' || level === 'group') return null;
+  const db = Object.keys(store.taxonomy)[0];
+  if (!db || !store.taxonomy[db]) return null;
+
+  const levels = store.taxonomy[db].levels || [];
+  const assignments = store.taxonomy[db].assignments || {};
+  const levelIdx = levels.indexOf(level);
+  if (levelIdx < 0) return null;
+
+  let re;
+  try { re = new RegExp(taxonFilter, 'i'); } catch { re = null; }
+  const lower = taxonFilter.toLowerCase();
+
+  const out = new Set();
+  for (const asvId in assignments) {
+    const vals = assignments[asvId] || [];
+    const fullTax = vals.filter(Boolean).join(';');
+    const match = re
+      ? (re.test(fullTax) || re.test(asvId))
+      : (fullTax.toLowerCase().includes(lower) || asvId.toLowerCase().includes(lower));
+    if (match && vals[levelIdx]) out.add(vals[levelIdx]);
+  }
+  return out;
+}
+
+
 export function buildTaxColorMap(level, taxonFilter = '') {
   const db = Object.keys(store.taxonomy)[0];
   if (!db || !store.taxonomy[db]) return { colorMap: {}, ranked: [] };
@@ -314,13 +350,14 @@ export async function loadData() {
   store.error = null;
 
   try {
-    const [samples, asvs, counts, network, taxonomy, treeNewick] = await Promise.all([
-      fetchJson('/data/samples.json').catch(() => []),
-      fetchJson('/data/asvs.json').catch(() => []),
-      fetchJson('/data/counts.json').catch(() => ({ data: [], samples: [], asvs: [] })),
-      fetchJson('/data/network.json').catch(() => ({ edges: [] })),
-      fetchJson('/data/taxonomy.json').catch(() => ({})),
-      fetch('/data/tree.nwk').then(r => r.ok ? r.text() : '').catch(() => ''),
+    const [samples, asvs, counts, network, taxonomy, treeNewick, provenance] = await Promise.all([
+      fetchJson('./data/samples.json').catch(() => []),
+      fetchJson('./data/asvs.json').catch(() => []),
+      fetchJson('./data/counts.json').catch(() => ({ data: [], samples: [], asvs: [] })),
+      fetchJson('./data/network.json').catch(() => ({ edges: [] })),
+      fetchJson('./data/taxonomy.json').catch(() => ({})),
+      fetch('./data/tree.nwk').then(r => r.ok ? r.text() : '').catch(() => ''),
+      fetchJson('./data/provenance.json').catch(() => null),
     ]);
 
     store.samples = samples;
@@ -329,9 +366,10 @@ export async function loadData() {
     store.network = network;
     store.taxonomy = taxonomy;
     store.treeNewick = treeNewick.trim();
+    store.provenance = provenance || null;
 
     // Load heatmap data (async, non-blocking)
-    fetch('/data/heatmap.json.gz')
+    fetch('./data/heatmap.json.gz')
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) {
@@ -342,7 +380,7 @@ export async function loadData() {
       .catch(() => {});
 
     // Load pre-aggregated counts
-    fetch('/data/aggregated_counts.json.gz')
+    fetch('./data/aggregated_counts.json.gz')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) store.aggCounts = d; })
       .catch(() => {});

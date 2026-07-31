@@ -65,8 +65,8 @@
 
   onMount(async () => {
     try {
-      let res = await fetch('/data/heatmap.json.gz');
-      if (!res.ok) res = await fetch('/data/heatmap.json');
+      let res = await fetch('./data/heatmap.json.gz');
+      if (!res.ok) res = await fetch('./data/heatmap.json');
       if (res.ok) {
         rawHeatmapData = await res.json();
         const filtered = filterHeatmap(rawHeatmapData, filters.heatmapMinMaxRA ?? 1.0);

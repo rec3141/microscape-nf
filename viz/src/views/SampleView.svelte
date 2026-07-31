@@ -5,6 +5,7 @@
     store, countsBySample,
     GROUP_HEX,
     buildTaxColorMap, getAsvColor, getEffectiveColorLevel, getClusterColor,
+    taxaMatchingFilter,
   } from '../stores/data.svelte.js';
 
   let { filters = {} } = $props();
@@ -102,6 +103,10 @@
     const isAsvLevel = colorLevel === '_asv';
     const aggLevel = isAsvLevel ? null : colorLevel;
     const aggData = aggLevel && store.aggCounts?.[aggLevel];
+    // Once drilled down, filters.taxonFilter is an ancestor of the aggregated
+    // taxa, so it must be resolved to the matching taxa at this level rather
+    // than regex-tested against each child name (which matched nothing).
+    const allowedTaxa = taxaMatchingFilter(aggLevel, filters.taxonFilter);
 
     const allPoints = [];
 
@@ -134,8 +139,10 @@
         const sample = sampleLookup[sid];
         const taxon = aggTaxa[ti];
 
-        // Apply taxonomy filter
-        if (re && !re.test(taxon)) continue;
+        // Apply taxonomy filter (lineage-aware, see allowedTaxa above)
+        if (allowedTaxa) {
+          if (!allowedTaxa.has(taxon)) continue;
+        } else if (re && !re.test(taxon)) continue;
 
         const proportion = prop || (count / (sampleTotals[sid] || 1));
         const color = cmap ? (taxonColors[taxon] || '#475569') : (GROUP_HEX[taxon] || '#475569');

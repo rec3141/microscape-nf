@@ -131,3 +131,7 @@ stats = pd.DataFrame([{
     "pct_retained": pct_retained,
 }])
 stats.to_csv("chimera_stats.tsv", sep="\t", index=False)
+
+# Per-sample read counts after chimera removal — feeds the provenance tracker.
+(dt_clean.groupby("sample")["count"].sum().rename("reads")
+         .reset_index().to_csv("chimera_sample_reads.tsv", sep="\t", index=False))

@@ -37,6 +37,8 @@ def helpMessage() {
       --primers_fwd PATH   Forward primer FASTA (overrides auto-selection)
       --primers_rev PATH   Reverse primer FASTA (overrides auto-selection)
       --primer_error_rate  Cutadapt error rate [default: 0.12]
+      --primer_detect_reads N  Reads sampled for primer detection [default: 500]
+      --min_group_samples N    Min samples before a run/assay group is pooled [default: 3]
 
     Demultiplexing (optional):
       --run_demultiplex    Enable demultiplexing with Mr_Demuxy [default: false]
@@ -110,6 +112,7 @@ if (params.run_demultiplex && (!params.forward_bcs || !params.reverse_bcs)) {
 include { DEMULTIPLEX }       from './modules/demultiplex'
 include { DETECT_PRIMERS }    from './modules/primers'
 include { REMOVE_PRIMERS }    from './modules/primers'
+include { PRIMER_ASSIGNMENT } from './modules/primers'
 include { AUTO_TRIM }         from './modules/denoise'
 include { FILTER_TRIM }       from './modules/denoise'
 include { LEARN_ERRORS }      from './modules/denoise'
@@ -133,6 +136,68 @@ include { BUNDLE_VIZ_SITE }  from './modules/shiny'
 // ============================================================================
 // Main workflow
 // ============================================================================
+
+
+// ── Sequencing-run recovery ──────────────────────────────────────────────────
+//
+// `plate` groups samples for AUTO_TRIM (pooled quality profile) and LEARN_ERRORS
+// (one DADA2 error model per group). For SRA input it used to collapse to the
+// run accession, so every sample became its own group — a parametric error model
+// fitted on as few as ~1.4k reads, and a truncation length chosen from one
+// sample's ragged length distribution.
+//
+// The grouping is recoverable. SRA rewrites the read identifier, but
+// fasterq-dump keeps the submitter's original name in field 2:
+//
+//   @SRR38958117.1 M04437:232:000000000-BNWCH:1:1101:16513:1933 length=251
+//                  └── instrument:run:flowcell:lane ──┘
+//
+// which is exactly the unit DADA2 wants an error model for. Present in 822/822
+// runs across every dataset checked (NCBI and DDBJ), but it depends on the
+// submitter having uploaded original names, so this always falls back.
+def runIdFromReads(reads) {
+    try {
+        def first = (reads instanceof List || reads instanceof Object[]) ? reads[0] : reads
+        def path = first as java.nio.file.Path
+        def raw = java.nio.file.Files.newInputStream(path)
+        def stream = path.toString().endsWith('.gz') ? new java.util.zip.GZIPInputStream(raw) : raw
+        def line = new BufferedReader(new InputStreamReader(stream)).readLine()
+        stream.close()
+        if (!line) return null
+        def fields = line.trim().split(/\s+/)
+        if (fields.size() < 2) return null
+        def parts = fields[1].split(':')
+        // instrument:run:flowcell:lane — anything shorter isn't an Illumina header
+        if (parts.size() < 4) return null
+        // The group name becomes part of a filename (e.g. <plate>_errF.pkl), and
+        // Nextflow escapes colons in paths, which then don't resolve. Keep it
+        // filesystem-safe while still readable as instrument_run_flowcell_lane.
+        return parts[0..3].join(':').replaceAll(/[^A-Za-z0-9._-]/, '_')
+    }
+    catch (Exception e) {
+        return null
+    }
+}
+
+// Grouping key for AUTO_TRIM and LEARN_ERRORS: the sequencing run when we can
+// recover it, else the historical accession/plate split.
+//
+// The assay is part of the key because one flowcell can carry more than one
+// amplicon, and those differ in both length and error structure — a 16S V3-V4
+// product and an 18S V4 product on the same run want their own truncation and
+// their own error model. Where a run carries a single assay this is a no-op.
+def plateFor(meta, reads, assay = null) {
+    def runId = runIdFromReads(reads)
+    def base = runId
+    if (!base) {
+        def parts = meta.id.split('_')
+        base = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
+    }
+    if (assay && assay != 'none') {
+        base = "${base}__${assay}".replaceAll(/[^A-Za-z0-9._-]/, '_')
+    }
+    return base
+}
 
 workflow {
 
@@ -200,13 +265,16 @@ workflow {
     }
 
     // 3. Remove primers with cutadapt (skip if input is already trimmed)
+    // Cutadapt's own per-adapter counts are the record of which assay each sample
+    // really carries, so collect the logs from whichever branch ran. Stays empty
+    // when primer removal is skipped, and BUILD_VIZ handles that.
+    ch_cutadapt_logs = Channel.empty()
     if (params.skip_primer_removal || params.samplesheet) {
         // Samplesheet mode: primer removal happens per primer_pair, or data is pre-trimmed
         ch_trimmed = ch_demuxed
             .map { meta, r1, r2 ->
                 if (!meta.plate) {
-                    def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
-                    meta = meta + [plate: plate]
+                    meta = meta + [plate: plateFor(meta, r1)]
                 }
                 [meta, r1, r2]
             }
@@ -220,32 +288,56 @@ workflow {
                 }
 
             REMOVE_PRIMERS(ch_with_primers)
+            ch_cutadapt_logs = REMOVE_PRIMERS.out.log
             ch_trimmed = REMOVE_PRIMERS.out.reads
-                .map { meta, r1, r2 -> [meta, r1, r2] }
+                .map { meta, r1, r2, assay ->
+                    [meta + [plate: plateFor(meta, r1, assay)], r1, r2]
+                }
         }
     } else if (params.primers_fwd && params.primers_rev) {
-        ch_with_primers = ch_demuxed.map { meta, r1, r2 ->
-            [meta, r1, r2, file(params.primers_fwd)]
-        }
+        // REMOVE_PRIMERS applies one primer file to both reads (cutadapt -g/-G
+        // selects the matching primer per read), exactly like the samplesheet and
+        // auto-detect paths whose primers-*.fa hold both fwd and rev. Passing only
+        // primers_fwd here trimmed R2 with the forward primer, so cutadapt's
+        // --discard-untrimmed dropped ~every pair. Combine fwd + rev into one file.
+        ch_primers_combined = Channel
+            .fromPath([params.primers_fwd, params.primers_rev])
+            .collectFile(name: 'primers_combined.fa')
+        ch_with_primers = ch_demuxed.combine(ch_primers_combined)
         REMOVE_PRIMERS(ch_with_primers)
+        ch_cutadapt_logs = REMOVE_PRIMERS.out.log
         ch_trimmed = REMOVE_PRIMERS.out.reads
-            .map { meta, r1, r2 ->
-                def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
-                def new_meta = meta + [plate: plate]
-                [new_meta, r1, r2]
+            .map { meta, r1, r2, assay ->
+                [meta + [plate: plateFor(meta, r1, assay)], r1, r2]
             }
     } else {
-        // Auto-detect best primer pair per sample
-        ch_primer_files = Channel.fromPath("${projectDir}/primers/primers-*.fa").collect()
-        DETECT_PRIMERS(ch_demuxed, ch_primer_files)
+        // Detect the primer pair per sample from the reads themselves
+        DETECT_PRIMERS(ch_demuxed)
         REMOVE_PRIMERS(DETECT_PRIMERS.out.detected)
+        ch_cutadapt_logs = REMOVE_PRIMERS.out.log
         ch_trimmed = REMOVE_PRIMERS.out.reads
-            .map { meta, r1, r2 ->
-                def parts = meta.id.split('_'); def plate = parts.size() > 2 ? parts[0..1].join('_') : parts[0]
-                def new_meta = meta + [plate: plate]
-                [new_meta, r1, r2]
+            .map { meta, r1, r2, assay ->
+                [meta + [plate: plateFor(meta, r1, assay)], r1, r2]
             }
     }
+
+    // A group too small to fit an error model is pooled rather than fitted alone.
+    // DADA2 fits a parametric model over quality bins; below a few samples most
+    // bins are noise, and a noisy model is worse than a slightly mismatched one
+    // shared with neighbours. Pool and say so, rather than fit in silence (#7).
+    ch_trimmed = ch_trimmed
+        .map { meta, r1, r2 -> [meta.plate, meta, r1, r2] }
+        .groupTuple(by: 0)
+        .flatMap { plate, metas, r1s, r2s ->
+            def pooled = metas.size() < params.min_group_samples
+            if (pooled) {
+                log.warn "Group '${plate}' has only ${metas.size()} sample(s) — " +
+                         "pooling it for truncation and error learning " +
+                         "(--min_group_samples ${params.min_group_samples})"
+            }
+            def key = pooled ? 'pooled' : plate
+            (0..<metas.size()).collect { i -> [metas[i] + [plate: key], r1s[i], r2s[i]] }
+        }
 
     // 4a. Auto-detect truncation lengths per plate (or use explicit params)
     if (params.auto_trim && params.truncLen_fwd == 0 && params.truncLen_rev == 0) {
@@ -301,6 +393,11 @@ workflow {
         }
 
     DENOISE(ch_denoise_input)
+
+
+    // One row per sample: which primer actually matched, and how many reads.
+    PRIMER_ASSIGNMENT(ch_cutadapt_logs.collect())
+    ch_primer_assignment = PRIMER_ASSIGNMENT.out.tsv
 
     // 5. Merge all sequence tables and remove chimeras
     ch_all_seqtabs = DENOISE.out.seqtab.map { meta, rds -> rds }.collect()
@@ -374,14 +471,19 @@ workflow {
             .flatten()
             .collect()
 
+        // t-SNE and network are optional enhancements running under
+        // errorStrategy 'ignore'. Feed sentinels when their channels are empty
+        // (the process failed/was skipped) so BUILD_VIZ still runs — the viz
+        // just loses scatter coords / network edges instead of vanishing.
         BUILD_VIZ(
             FILTER_SEQTAB.out.seqtab,
             RENORMALIZE.out.merged,
             ch_tax_files,
             ch_metadata.ifEmpty(file('NO_METADATA')),
-            CLUSTER_TSNE.out.sample_tsne,
-            CLUSTER_TSNE.out.seq_tsne,
-            NETWORK_SPARCC.out.correlations
+            CLUSTER_TSNE.out.sample_tsne.ifEmpty(file('NO_SAMPLE_TSNE')),
+            CLUSTER_TSNE.out.seq_tsne.ifEmpty(file('NO_SEQ_TSNE')),
+            NETWORK_SPARCC.out.correlations.ifEmpty(file('NO_NETWORK')),
+            ch_primer_assignment.ifEmpty(file('NO_PRIMER_ASSIGNMENT'))
         )
 
         // 13. Optional: bundle static viz site (requires Node.js)
@@ -465,6 +567,10 @@ workflow.onComplete {
                     denoise_engine       : params.denoise_engine,
                     skip_primer_removal  : params.skip_primer_removal,
                     primer_error_rate    : params.primer_error_rate,
+                    // added on main while this branch was open — a manifest that omits
+                    // a parameter is the same failure as one that reports a stale version
+                    primer_detect_reads  : params.primer_detect_reads,
+                    min_group_samples    : params.min_group_samples,
                     auto_trim            : params.auto_trim,
                     auto_trim_min_quality: params.auto_trim_min_quality,
                     maxEE                : params.maxEE,

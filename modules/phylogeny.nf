@@ -11,6 +11,12 @@ process BUILD_PHYLOGENY {
     label 'process_high'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
     publishDir "${params.outdir}/phylogeny", mode: 'copy'
+    // Also publish the Newick tree into viz/ as tree.nwk. The viz app fetches
+    // data/tree.nwk for its Phylogeny view, and viz/ is what gets deployed as
+    // the site's data/ — without this the tree stayed in phylogeny/ and the
+    // Phylogeny tab 404'd even when --run_phylogeny was set.
+    publishDir "${params.outdir}/viz", mode: 'copy', pattern: 'phylo_tree.nwk',
+               saveAs: { 'tree.nwk' }
     storeDir params.store_dir ? "${params.store_dir}/phylogeny" : null
 
     input:

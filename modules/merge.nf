@@ -13,6 +13,10 @@ process MERGE_SEQTABS {
     tag "merge-all"
     label 'process_medium'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
+    // Publish the stats: without them the read/sample attrition between
+    // denoising and the final table is invisible in the results, which made
+    // a 218k -> 51k read drop impossible to attribute after the fact.
+    publishDir "${params.outdir}/seqtab_final", mode: 'copy', pattern: '*.tsv'
 
     input:
     path(seqtab_files)
@@ -20,6 +24,7 @@ process MERGE_SEQTABS {
     output:
     path("seqtab_merged.${seqExt()}"), emit: seqtab
     path("merge_stats.tsv"), emit: stats
+    path("merge_sample_reads.tsv"), emit: sample_reads, optional: true
 
     script:
     if (params.lang == 'python')
@@ -37,6 +42,10 @@ process REMOVE_CHIMERAS {
     tag "chimera-removal"
     label 'process_high'
     conda params.lang == 'python' ? "${projectDir}/envs/python.yml" : "${projectDir}/envs/r.yml"
+    // Publish the stats: without them the read/sample attrition between
+    // denoising and the final table is invisible in the results, which made
+    // a 218k -> 51k read drop impossible to attribute after the fact.
+    publishDir "${params.outdir}/seqtab_final", mode: 'copy', pattern: '*.tsv'
 
     input:
     path(seqtab)
@@ -44,6 +53,7 @@ process REMOVE_CHIMERAS {
     output:
     path("seqtab_nochim.${seqExt()}"), emit: seqtab
     path("chimera_stats.tsv"), emit: stats
+    path("chimera_sample_reads.tsv"), emit: sample_reads, optional: true
 
     script:
     if (params.lang == 'python')
@@ -72,6 +82,7 @@ process FILTER_SEQTAB {
     path("seqtab_orphans.${seqExt()}"), emit: orphans
     path("seqtab_small.${seqExt()}"), emit: small_samples
     path("filter_stats.tsv"), emit: stats
+    path("final_sample_reads.tsv"), emit: sample_reads, optional: true
     path("sequence_summaries.pdf"), emit: plots
 
     script:
