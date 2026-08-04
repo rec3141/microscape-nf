@@ -108,6 +108,9 @@ SAMPLES_EOF
 policy  = "${params.trunc_policy}"
 min_len = int("${params.auto_trim_min_length}")
 plate   = "${plate_id}"
+min_overlap = int("${params.min_overlap}")
+min_seq_len = int("${params.min_seq_length}")
+expected    = int("${params.expected_amplicon_length}")
 
 rows = []
 for line in open("samples.tsv"):
@@ -148,6 +151,24 @@ fwd, rev = max(raw_fwd, min_len), max(raw_rev, min_len)
 # lose reads purely because of the group they landed in.
 past = [r[0] for r in rows if r[1] < fwd or r[2] < rev]
 
+# Can a merged fragment still exist? mergePairs needs fwd + rev to cover the
+# fragment plus min_overlap. Too little does not raise — pairs quietly fail to
+# merge, samples fall under min_reads, and the run returns a smaller table that
+# looks fine. Check it here, before denoising, not by counting missing samples
+# afterwards.
+span = fwd + rev
+floor_need = min_seq_len + min_overlap      # structural: shorter cannot merge at all
+frag_need = (expected + min_overlap) if expected > 0 else 0
+frag_warn = ""
+if span < floor_need:
+    frag_warn = ("span %d < min_seq_length %d + min_overlap %d = %d: no pair can merge "
+                 "into a sequence this pipeline would keep"
+                 % (span, min_seq_len, min_overlap, floor_need))
+elif frag_need and span < frag_need:
+    frag_warn = ("span %d < expected_amplicon_length %d + min_overlap %d = %d: pairs "
+                 "will fail to merge and samples will drop out under min_reads"
+                 % (span, expected, min_overlap, frag_need))
+
 with open(plate + "_trunc_policy.tsv", "w") as out:
     out.write("key\\tvalue\\n")
     out.write("policy\\t%s\\n" % policy)
@@ -156,13 +177,21 @@ with open(plate + "_trunc_policy.tsv", "w") as out:
     out.write("trunc_len_rev_applied\\t%d\\n" % rev)
     out.write("floored\\t%s\\n" % str(fwd != raw_fwd or rev != raw_rev).lower())
     out.write("samples_truncated_past_own\\t%d\\n" % len(past))
+    out.write("span_fwd_plus_rev\\t%d\\n" % span)
+    out.write("span_required\\t%d\\n" % max(floor_need, frag_need))
+    out.write("span_sufficient\\t%s\\n" % str(not frag_warn).lower())
     out.write("#\\tper-sample values follow\\n")
     out.write("#sample\\ttrunc_fwd\\ttrunc_rev\\ttruncated_past_own\\n")
     for s, f, r in sorted(rows):
         out.write("%s\\t%d\\t%d\\t%s\\n" % (s, f, r, str(f < fwd or r < rev).lower()))
 
-print("[INFO] Trunc policy %s for %s: fwd=%d rev=%d from %d samples" %
-      (policy, plate, fwd, rev, len(rows)))
+print("[INFO] Trunc policy %s for %s: fwd=%d rev=%d from %d samples (span %d)" %
+      (policy, plate, fwd, rev, len(rows), span))
+if frag_warn:
+    print("[WARN] Trunc policy %s for %s: %s" % (policy, plate, frag_warn))
+elif expected <= 0:
+    print("[INFO] Trunc policy %s for %s: overlap unchecked against the amplicon "
+          "(set --expected_amplicon_length to enable)" % (policy, plate))
 if past:
     print("[WARN] Trunc policy %s for %s: %d of %d samples truncated past their own "
           "quality cliff and will lose reads at the filter: %s"
