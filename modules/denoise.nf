@@ -135,7 +135,12 @@ for line in open("samples.tsv"):
 if not rows:
     raise SystemExit("TRUNC_POLICY: no per-sample truncation values for " + plate)
 
-QUANTILES = {"q10": 0.10, "q25": 0.25, "median": 0.50, "q75": 0.75}
+# PERCENTILES of the group's per-sample truncation LENGTHS. Deliberately spelled
+# p25 and not q25: in amplicon work qNN means a Phred quality score, and this
+# config already carries auto_trim_min_quality = 25, so a `q25` here would sit a
+# few lines from a literal Q25 meaning something entirely different. p50 is the
+# median.
+PERCENTILES = {"p10": 0.10, "p25": 0.25, "p50": 0.50, "p75": 0.75}
 
 def pick(vals):
     v = sorted(vals)
@@ -143,10 +148,17 @@ def pick(vals):
         return v[0]
     if policy == "max":
         return v[-1]
-    if policy not in QUANTILES:
+    if policy not in PERCENTILES:
+        hint = ""
+        if policy.startswith("q") and policy[1:].isdigit():
+            hint = (" — did you mean 'p" + policy[1:] + "'? These are percentiles of "
+                    "read LENGTH, not Phred quality scores; qNN is not accepted here "
+                    "precisely because it reads like one")
+        elif policy == "median":
+            hint = " — the median is spelled 'p50'"
         raise SystemExit("TRUNC_POLICY: unknown --trunc_policy '" + policy +
-                         "' (min, q10, q25, median, q75, max)")
-    i = QUANTILES[policy] * (len(v) - 1)
+                         "' (min, p10, p25, p50, p75, max)" + hint)
+    i = PERCENTILES[policy] * (len(v) - 1)
     lo = int(i); hi = min(lo + 1, len(v) - 1)
     return int(round(v[lo] + (i - lo) * (v[hi] - v[lo])))
 
