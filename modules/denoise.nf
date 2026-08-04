@@ -18,22 +18,12 @@ def denoiseEngine() { return params.denoise_engine ?: params.lang }
 def errExt() { return denoiseEngine() == 'python' ? 'pkl' : 'rds' }
 def seqExt() { return params.lang == 'python' ? 'pkl' : 'rds' }
 
-// PER-SAMPLE auto-trim. Every sample is profiled on its own reads; the group's
-// value is then chosen from those by TRUNC_POLICY.
+// Per-sample auto-trim: each sample is profiled on its own reads and gets its own
+// *_auto_trim.tsv. TRUNC_POLICY then chooses the group's value from these.
 //
-// This used to run once per plate over every read in the group pooled into one
-// directory. That did not produce a group consensus — the profiler samples the
-// first `n_reads_sampled` reads it encounters, which all come from whichever
-// sample sorts first, so the group's truncation was set by ONE arbitrary sample
-// chosen by filename order. Measured on 492f42d0: the group value equalled the
-// alphabetically-first sample's value in 12 of 14 groups, versus 6 of 14 for the
-// group max and 6 of 14 for the median. On 2d9fa6af it looked like a deliberate
-// "take the max" only because the first-sorting sample also happened to have the
-// highest value — a coincidence that hid the real behaviour.
-//
-// Profiling per sample also restores the per-sample *_auto_trim.tsv files, which
-// silently stopped existing when this went per-plate, taking with them the only
-// record of what each sample would have chosen for itself.
+// Profile per sample, never over a group's reads pooled together: the profiler
+// only reads the first `n_reads_sampled` reads it is given, so a pooled directory
+// yields the first sample's answer rather than the group's.
 process AUTO_TRIM {
     tag "${meta.id}"
     label 'process_low'
@@ -81,29 +71,21 @@ process AUTO_TRIM {
     """
 }
 
-// Collapse a group's per-sample truncation lengths into the one pair the group
-// will actually use, by an EXPLICIT policy, and record what was collapsed.
+// Collapse a group's per-sample truncation lengths into the single pair the group
+// will use, by --trunc_policy, and record what was collapsed.
 //
-// There is no free choice here, only a trade. DADA2 discards any read shorter
-// than truncLen, so a long value silently drops reads from every sample whose
-// quality falls off earlier; a short one keeps them but spends overlap, and if
-// overlap runs out mergePairs discards ~100% and the sample vanishes instead.
-// Measured on 2d9fa6af (one group, 12 samples): min recovered +51% final reads
-// and +26% ASVs over the longest value, at no cost in ASV length. Measured on
-// 492f42d0 (14 groups): a few degraded samples bottom out near 22bp, so `min`
-// there is set by the worst library in the group — which is why the default is a
-// low quantile rather than the minimum, and why the floor below still applies.
-//
-// Whatever is chosen, the per-sample values and the resulting loss are written
-// out. A truncation that discards half a sample's reads should never be silent.
+// The choice is a trade with a cliff on each side. DADA2 discards reads shorter
+// than truncLen, so a long value drops reads from every sample whose quality
+// falls off earlier. A short value keeps them but spends the overlap mergePairs
+// needs: once fwd + rev drops below the amplicon length plus min_overlap, pairs
+// stop merging and samples fall under min_reads instead. Both losses are silent
+// in the final table, which is why the per-sample values and the resulting loss
+// are written out here.
 process TRUNC_POLICY {
     tag "${plate_id}"
     label 'process_low'
-    // Echo this process's stdout to the run log. Without it Nextflow files process
-    // output in .command.out inside the work dir, where nobody looks — which is
-    // why AUTO_TRIM's existing [WARN] lines have never appeared in a single run
-    // log. A warning that a group is discarding half a sample's reads is worth
-    // nothing if it is only readable by someone who already suspects it.
+    // Echo stdout to the run log; without this the warnings below reach only
+    // .command.out in the work dir.
     debug true
     publishDir "${params.outdir}/quality_check", mode: 'copy', pattern: "*_trunc_policy.tsv"
 
@@ -135,11 +117,7 @@ for line in open("samples.tsv"):
 if not rows:
     raise SystemExit("TRUNC_POLICY: no per-sample truncation values for " + plate)
 
-# PERCENTILES of the group's per-sample truncation LENGTHS. Deliberately spelled
-# p25 and not q25: in amplicon work qNN means a Phred quality score, and this
-# config already carries auto_trim_min_quality = 25, so a `q25` here would sit a
-# few lines from a literal Q25 meaning something entirely different. p50 is the
-# median.
+# Percentiles of the group's per-sample truncation LENGTHS — not Phred scores.
 PERCENTILES = {"p10": 0.10, "p25": 0.25, "p50": 0.50, "p75": 0.75}
 
 def pick(vals):
@@ -152,10 +130,9 @@ def pick(vals):
         hint = ""
         if policy.startswith("q") and policy[1:].isdigit():
             hint = (" — did you mean 'p" + policy[1:] + "'? These are percentiles of "
-                    "read LENGTH, not Phred quality scores; qNN is not accepted here "
-                    "precisely because it reads like one")
+                    "read length, not Phred quality scores")
         elif policy == "median":
-            hint = " — the median is spelled 'p50'"
+            hint = " — the median is 'p50'"
         raise SystemExit("TRUNC_POLICY: unknown --trunc_policy '" + policy +
                          "' (min, p10, p25, p50, p75, max)" + hint)
     i = PERCENTILES[policy] * (len(v) - 1)
