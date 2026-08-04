@@ -91,6 +91,7 @@ process TRUNC_POLICY {
 
     input:
     tuple val(plate_id), val(sample_ids), val(fwds), val(revs)
+    path primer_files    // fwd/rev fasta when --primers_* were given, else empty
 
     output:
     tuple val(plate_id), env(TRUNC_FWD), env(TRUNC_REV), emit: trim_params
@@ -111,6 +112,37 @@ plate   = "${plate_id}"
 min_overlap = int("${params.min_overlap}")
 min_seq_len = int("${params.min_seq_length}")
 expected    = int("${params.expected_amplicon_length}")
+
+# Fall back to the primer database when no length was given: expected_length in
+# the vendored 16S table minus the two primers cutadapt removed. 18S and ITS
+# tables carry no lengths, and de-novo inferred primers are in no table, so this
+# resolves for some runs and not others — say which, never guess.
+expected_src = "--expected_amplicon_length"
+if expected <= 0:
+    import glob as _glob, sys as _sys
+    _sys.path.insert(0, "${projectDir}/bin")
+    seqs = []
+    for fa in sorted(_glob.glob("*.fa")) + sorted(_glob.glob("*.fasta")):
+        cur = []
+        for line in open(fa):
+            line = line.strip()
+            if line.startswith(">"):
+                if cur: seqs.append("".join(cur)); cur = []
+            elif line:
+                cur.append(line.upper())
+        if cur: seqs.append("".join(cur))
+    try:
+        from primer_db import insert_length_for
+        for i in range(len(seqs)):
+            for j in range(len(seqs)):
+                if i == j: continue
+                hit = insert_length_for(seqs[i], seqs[j])
+                if hit:
+                    expected, expected_src = hit, "primer database"
+                    break
+            if expected > 0: break
+    except Exception as e:
+        print("[INFO] Trunc policy: primer database unavailable (%s)" % e)
 
 rows = []
 for line in open("samples.tsv"):
@@ -180,6 +212,8 @@ with open(plate + "_trunc_policy.tsv", "w") as out:
     out.write("span_fwd_plus_rev\\t%d\\n" % span)
     out.write("span_required\\t%d\\n" % max(floor_need, frag_need))
     out.write("span_sufficient\\t%s\\n" % str(not frag_warn).lower())
+    out.write("expected_amplicon_length\\t%s\\n" % (expected if expected > 0 else ""))
+    out.write("expected_amplicon_source\\t%s\\n" % (expected_src if expected > 0 else "unknown"))
     out.write("#\\tper-sample values follow\\n")
     out.write("#sample\\ttrunc_fwd\\ttrunc_rev\\ttruncated_past_own\\n")
     for s, f, r in sorted(rows):
@@ -189,9 +223,12 @@ print("[INFO] Trunc policy %s for %s: fwd=%d rev=%d from %d samples (span %d)" %
       (policy, plate, fwd, rev, len(rows), span))
 if frag_warn:
     print("[WARN] Trunc policy %s for %s: %s" % (policy, plate, frag_warn))
-elif expected <= 0:
-    print("[INFO] Trunc policy %s for %s: overlap unchecked against the amplicon "
-          "(set --expected_amplicon_length to enable)" % (policy, plate))
+elif expected > 0:
+    print("[INFO] Trunc policy %s for %s: span %d covers the %dbp fragment (%s) "
+          "plus %dbp overlap" % (policy, plate, span, expected, expected_src, min_overlap))
+else:
+    print("[INFO] Trunc policy %s for %s: overlap unchecked — no amplicon length for "
+          "these primers (set --expected_amplicon_length)" % (policy, plate))
 if past:
     print("[WARN] Trunc policy %s for %s: %d of %d samples truncated past their own "
           "quality cliff and will lose reads at the filter: %s"

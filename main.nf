@@ -352,7 +352,15 @@ workflow {
             }
             .groupTuple(by: 0)
 
-        TRUNC_POLICY(ch_trunc_policy_in)
+        // Primer sequences let TRUNC_POLICY resolve the expected fragment length
+        // from the primer database. Only the explicit --primers_* path can supply
+        // them here; without them the overlap check falls back to the structural
+        // floor and says it is unchecked.
+        ch_trunc_primers = (params.primers_fwd && params.primers_rev)
+            ? Channel.fromPath([params.primers_fwd, params.primers_rev]).collect()
+            : Channel.value([])
+
+        TRUNC_POLICY(ch_trunc_policy_in, ch_trunc_primers)
 
         // Join trim params back to individual samples by plate
         ch_filter_input = ch_trimmed
